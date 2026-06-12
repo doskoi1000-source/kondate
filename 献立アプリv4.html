@@ -1,0 +1,1682 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>献立計算アプリ — 食材・分量の自動算出</title>
+<style>
+  :root{
+    --bg:#f6f4ef; --card:#ffffff; --ink:#33312c; --sub:#7d786e;
+    --accent:#e07a3f; --accent-dark:#c5642c; --green:#5d8a4e; --line:#e6e2d8;
+    --chip-veg:#e3efdc; --chip-meat:#f7e0d6; --chip-dairy:#fdf3d7;
+    --chip-staple:#e4e9f2; --chip-season:#efe4f0; --chip-other:#eeeeea;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{font-family:"Hiragino Kaku Gothic ProN","Yu Gothic UI","Meiryo",sans-serif;
+    background:var(--bg); color:var(--ink); line-height:1.6; padding-bottom:60px;}
+  header{background:var(--card); border-bottom:1px solid var(--line); padding:18px 16px 0;}
+  .hwrap{max-width:960px; margin:0 auto;}
+  h1{font-size:1.25rem; display:flex; align-items:center; gap:8px;}
+  h1 .emoji{font-size:1.5rem;}
+  .subtitle{color:var(--sub); font-size:.82rem; margin:2px 0 14px;}
+  .tabs{display:flex; gap:4px;}
+  .tab{border:none; background:transparent; padding:10px 18px; font-size:.95rem; cursor:pointer;
+    border-radius:10px 10px 0 0; color:var(--sub); font-weight:600;}
+  .tab.active{background:var(--bg); color:var(--accent-dark);}
+  main{max-width:960px; margin:20px auto; padding:0 16px;}
+  .panel{display:none;}
+  .panel.active{display:block;}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:14px;
+    padding:18px; margin-bottom:16px;}
+  .card h2{font-size:1.02rem; margin-bottom:12px; color:var(--accent-dark);}
+  label{font-size:.85rem; color:var(--sub); font-weight:600;}
+  select,input[type=number],input[type=text]{
+    font-size:.95rem; padding:8px 10px; border:1px solid var(--line); border-radius:8px;
+    background:#fff; color:var(--ink);}
+  select:focus,input:focus{outline:2px solid var(--accent); outline-offset:1px;}
+  .row{display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;}
+  .field{display:flex; flex-direction:column; gap:4px;}
+  .stepper{display:flex; align-items:center; gap:0;}
+  .stepper button{width:36px; height:38px; border:1px solid var(--line); background:#fff;
+    font-size:1.1rem; cursor:pointer; color:var(--accent-dark);}
+  .stepper button:first-child{border-radius:8px 0 0 8px;}
+  .stepper button:last-child{border-radius:0 8px 8px 0;}
+  .stepper input{width:64px; text-align:center; border-radius:0; border-left:none; border-right:none;}
+  .btn{background:var(--accent); color:#fff; border:none; border-radius:9px;
+    padding:10px 18px; font-size:.92rem; font-weight:700; cursor:pointer;}
+  .btn:hover{background:var(--accent-dark);}
+  .btn.ghost{background:#fff; color:var(--accent-dark); border:1px solid var(--accent);}
+  .btn.small{padding:5px 12px; font-size:.82rem;}
+  .btn.green{background:var(--green);}
+  table{width:100%; border-collapse:collapse; font-size:.93rem;}
+  th{font-size:.78rem; color:var(--sub); text-align:left; padding:6px 8px; border-bottom:2px solid var(--line);}
+  td{padding:8px; border-bottom:1px solid var(--line);}
+  td.qty{font-weight:700; white-space:nowrap;}
+  .chip{display:inline-block; font-size:.72rem; padding:2px 9px; border-radius:99px; font-weight:600;}
+  .c-veg{background:var(--chip-veg);} .c-meat{background:var(--chip-meat);}
+  .c-dairy{background:var(--chip-dairy);} .c-staple{background:var(--chip-staple);}
+  .c-season{background:var(--chip-season);} .c-other{background:var(--chip-other);}
+  .daycard{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin-bottom:10px;}
+  .daycard .dayhead{font-weight:700; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;}
+  .mealrow{display:flex; gap:8px; align-items:center; margin-bottom:6px; flex-wrap:wrap;}
+  .mealrow select{flex:1; min-width:180px;}
+  .mealrow input{width:60px; text-align:center;}
+  .mealrow .x{background:none; border:none; color:#c0392b; font-size:1.1rem; cursor:pointer; padding:2px 6px;}
+  .unitnote{font-size:.78rem; color:var(--sub);}
+  .shoplist .group{margin-bottom:14px;}
+  .shoplist .gtitle{font-weight:700; font-size:.9rem; padding:4px 10px; border-radius:6px; display:inline-block; margin-bottom:6px;}
+  .shopitem{display:flex; align-items:center; gap:10px; padding:7px 6px; border-bottom:1px dashed var(--line); font-size:.95rem;}
+  .shopitem input[type=checkbox]{width:18px; height:18px; accent-color:var(--green);}
+  .shopitem.done .iname,.shopitem.done .iqty{text-decoration:line-through; color:var(--sub);}
+  .iname{flex:1;}
+  .iqty{font-weight:700; white-space:nowrap;}
+  .hint{color:var(--sub); font-size:.8rem; white-space:nowrap;}
+  .empty{color:var(--sub); font-size:.9rem; padding:14px 4px;}
+  textarea{font-size:.95rem; padding:8px 10px; border:1px solid var(--line); border-radius:8px;
+    background:#fff; color:var(--ink); width:100%; resize:vertical; font-family:inherit;}
+  .steps{padding-left:1.5em; font-size:.93rem; margin-top:6px;}
+  .steps li{margin-bottom:5px;}
+  .steptitle{font-size:.95rem; color:var(--green); margin-top:16px; font-weight:700;}
+  .menuscroll{overflow-x:auto; -webkit-overflow-scrolling:touch;}
+  .menutable{min-width:680px; width:100%; border-collapse:collapse;}
+  .menutable th{background:var(--bg); font-size:.8rem; padding:8px 6px; border:1px solid var(--line); text-align:center;}
+  .menutable td{border:1px solid var(--line); padding:8px 8px; vertical-align:top; font-size:.85rem; min-width:120px;}
+  .menutable td.wk{background:var(--bg); font-weight:700; white-space:nowrap; font-size:.82rem; min-width:auto; text-align:center;}
+  .dishlink{display:block; color:var(--ink); cursor:pointer; padding:2px 0; border:none; background:none;
+    text-align:left; font-size:.85rem; width:100%;}
+  .dishlink:hover{color:var(--accent-dark); text-decoration:underline;}
+  .dishlink.main{font-weight:700;}
+  .ingrow{display:flex; gap:6px; margin-bottom:6px; flex-wrap:wrap;}
+  .ingrow input[type=text]{flex:2; min-width:120px;}
+  .ingrow input[type=number]{width:80px;}
+  .confirm-ov{position:fixed; inset:0; background:rgba(40,38,32,.45); z-index:90;
+    display:flex; align-items:center; justify-content:center; padding:20px;}
+  .confirm-box{background:var(--card); border-radius:14px; padding:20px; max-width:340px; width:100%;
+    box-shadow:0 8px 30px rgba(0,0,0,.25);}
+  .confirm-box p{font-size:.95rem; margin-bottom:16px;}
+  .toast{position:fixed; bottom:18px; left:50%; transform:translateX(-50%);
+    background:var(--ink); color:#fff; padding:10px 22px; border-radius:99px; font-size:.88rem;
+    opacity:0; transition:opacity .3s; pointer-events:none; z-index:99;}
+  .toast.show{opacity:1;}
+  .customlist li{display:flex; justify-content:space-between; align-items:center;
+    padding:6px 4px; border-bottom:1px dashed var(--line); font-size:.92rem; list-style:none;}
+  .menusummary{font-size:.85rem; color:var(--sub); margin-bottom:10px;}
+  @media (max-width:600px){ .tab{padding:9px 10px; font-size:.84rem;} }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hwrap">
+    <h1><span class="emoji">🍳</span>献立計算アプリ <span style="font-size:.8rem; color:#2e7d32">v5</span></h1>
+    <p class="subtitle">料理名から食材と分量を人数分で算出 ／ 一週間のメニューから買い物リストを作成
+      <span id="diagLine" style="display:inline-block; margin-left:8px; color:#b03a2e; font-weight:700">⚠ スクリプト停止中（この表示のままなら不具合です）</span>
+      <button class="btn ghost small" id="selfTestBtn" onclick="selfTest()" style="margin-left:8px; display:none">🔧 動作テスト</button>
+    </p>
+    <nav class="tabs">
+      <button class="tab active" data-panel="p-menu">メニュー一覧</button>
+      <button class="tab" data-panel="p-week">一週間メニュー</button>
+      <button class="tab" data-panel="p-dish">料理から計算</button>
+      <button class="tab" data-panel="p-recipe">レシピ管理</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+  <!-- ============ タブ: 料理から計算 ============ -->
+  <section id="p-dish" class="panel">
+    <div class="card">
+      <h2>料理と人数を選んでください</h2>
+      <div class="row">
+        <div class="field">
+          <label for="dishSelect">料理名</label>
+          <select id="dishSelect"></select>
+        </div>
+        <div class="field">
+          <label>人数</label>
+          <div class="stepper">
+            <button type="button" onclick="stepServ('dishServ',-1)">−</button>
+            <input type="number" id="dishServ" value="2" min="1" max="20">
+            <button type="button" onclick="stepServ('dishServ',1)">＋</button>
+          </div>
+        </div>
+        <button class="btn ghost small" onclick="copyDishList()">📋 コピー</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2 id="dishResultTitle">材料（2人分）</h2>
+      <table>
+        <thead><tr><th>分類</th><th>食材</th><th style="text-align:right">分量</th></tr></thead>
+        <tbody id="dishTbody"></tbody>
+      </table>
+      <p class="unitnote" style="margin-top:8px">※ 分量は1人分の目安量 × 人数で計算しています。「適量」は好みに合わせて調整してください。</p>
+      <div id="dishStepsWrap">
+        <p class="steptitle">👩‍🍳 作り方</p>
+        <ol id="dishSteps" class="steps"></ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ タブ2: 一週間メニュー ============ -->
+  <section id="p-week" class="panel">
+    <div class="card">
+      <h2>一週間の献立を入力</h2>
+      <div class="row" style="margin-bottom:14px">
+        <div class="field">
+          <label>基本の人数</label>
+          <div class="stepper">
+            <button type="button" onclick="stepServ('weekServ',-1)">−</button>
+            <input type="number" id="weekServ" value="2" min="1" max="20">
+            <button type="button" onclick="stepServ('weekServ',1)">＋</button>
+          </div>
+        </div>
+        <button class="btn ghost small" onclick="applyServAll()">全日に人数を一括適用</button>
+        <button class="btn ghost small" onclick="clearWeek()">献立をクリア</button>
+      </div>
+      <div class="row" style="margin-bottom:14px">
+        <div class="field">
+          <label for="presetSelect">献立プリセット（月別お昼メニュー）</label>
+          <select id="presetSelect"></select>
+        </div>
+        <button class="btn ghost small" onclick="loadPreset()">この週を読み込む</button>
+      </div>
+      <div id="weekDays"></div>
+    </div>
+
+    <div class="card shoplist">
+      <h2>🛒 買い物リスト（1週間分の集計）</h2>
+      <p class="menusummary" id="menuSummary"></p>
+      <div id="shopResult"><p class="empty">献立に料理を追加すると、必要な材料の種類と合計量がここに表示されます。</p></div>
+      <div class="row" style="margin-top:12px">
+        <button class="btn green" onclick="buildShoppingList()">買い物リストを作成・更新</button>
+        <button class="btn ghost" onclick="copyShoppingList()">📋 テキストでコピー</button>
+      </div>
+      <p class="unitnote" style="margin-top:8px">※ （→○個）は買い物時の切り上げ目安です。チェックを付けると打ち消し線になります。</p>
+    </div>
+  </section>
+
+  <!-- ============ タブ: メニュー一覧（初期表示） ============ -->
+  <section id="p-menu" class="panel active">
+    <div class="card">
+      <h2>📅 月間メニュー一覧</h2>
+      <div class="row" style="margin-bottom:12px">
+        <div class="field">
+          <label for="monthSelect">月を選択</label>
+          <select id="monthSelect"></select>
+        </div>
+      </div>
+      <div class="menuscroll" id="menuTableWrap"></div>
+      <p class="unitnote" style="margin-top:10px">
+        ※ 料理名をタップすると材料と作り方が開きます。「読込」でその週を一週間メニューに読み込めます。</p>
+    </div>
+  </section>
+
+  <!-- ============ タブ4: レシピ管理 ============ -->
+  <section id="p-recipe" class="panel">
+    <div class="card">
+      <h2>オリジナルレシピを追加（1人分の分量で入力）</h2>
+      <div class="row" style="margin-bottom:10px">
+        <div class="field">
+          <label>料理名</label>
+          <input type="text" id="newName" placeholder="例：我が家の野菜スープ" style="min-width:220px">
+        </div>
+        <div class="field">
+          <label>ジャンル</label>
+          <select id="newGenre">
+            <option>主菜（和食）</option><option>主菜（洋食）</option><option>主菜（中華・アジア）</option>
+            <option>副菜・小鉢</option><option>汁物・スープ</option><option>デザート他</option>
+          </select>
+        </div>
+      </div>
+      <label>材料（1人分）</label>
+      <div id="ingRows" style="margin-top:6px"></div>
+      <div class="row" style="margin-top:8px">
+        <button class="btn ghost small" onclick="addIngRow()">＋ 材料を追加</button>
+      </div>
+      <div class="field" style="margin-top:12px">
+        <label>作り方（任意・1行に1手順ずつ）</label>
+        <textarea id="newSteps" rows="4" placeholder="例：&#10;野菜を一口大に切る&#10;油で肉と野菜を炒める&#10;調味料を加えて煮込む"></textarea>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn" onclick="saveRecipe()">レシピを保存</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>保存済みオリジナルレシピ</h2>
+      <ul id="customList" class="customlist"><li class="empty">まだありません</li></ul>
+      <p class="unitnote" style="margin-top:8px">※ レシピと献立はこのブラウザ内（localStorage）に保存されます。</p>
+    </div>
+  </section>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   分類定義
+============================================================ */
+const CATS = {
+  veg:    {label:'野菜・きのこ',     cls:'c-veg'},
+  meat:   {label:'肉・魚介',         cls:'c-meat'},
+  dairy:  {label:'卵・乳・豆腐',     cls:'c-dairy'},
+  staple: {label:'主食・麺・粉',     cls:'c-staple'},
+  season: {label:'調味料',           cls:'c-season'},
+  other:  {label:'その他',           cls:'c-other'},
+};
+const CAT_ORDER = ['veg','meat','dairy','staple','season','other'];
+// 個数で数える単位 → 買い物時は切り上げ目安を表示
+const COUNTABLE = new Set(['個','本','枚','切れ','かけ','玉','束','丁','缶','袋','パック','箱','尾']);
+const UNITS = ['g','ml','個','本','枚','切れ','かけ','玉','束','丁','缶','袋','パック','尾','合','大さじ','小さじ','適量'];
+const GENRE_ORDER = ['主菜（和食）','主菜（洋食）','主菜（中華・アジア）','副菜・小鉢','汁物・スープ','デザート他'];
+
+/* ============================================================
+   内蔵レシピ（分量はすべて1人分）
+   n=食材名 q=数量 u=単位 c=分類
+============================================================ */
+const BUILTIN = [
+ {name:'カレーライス', genre:'主菜（洋食）', items:[
+   {n:'米',q:0.5,u:'合',c:'staple'},{n:'豚こま切れ肉',q:80,u:'g',c:'meat'},
+   {n:'玉ねぎ',q:0.5,u:'個',c:'veg'},{n:'にんじん',q:0.25,u:'本',c:'veg'},
+   {n:'じゃがいも',q:0.5,u:'個',c:'veg'},{n:'カレールー',q:25,u:'g',c:'season'},
+   {n:'サラダ油',q:0.5,u:'小さじ',c:'season'}]},
+ {name:'肉じゃが', genre:'主菜（和食）', items:[
+   {n:'牛薄切り肉',q:75,u:'g',c:'meat'},{n:'じゃがいも',q:1,u:'個',c:'veg'},
+   {n:'玉ねぎ',q:0.5,u:'個',c:'veg'},{n:'にんじん',q:0.25,u:'本',c:'veg'},
+   {n:'しらたき',q:50,u:'g',c:'other'},{n:'しょうゆ',q:1,u:'大さじ',c:'season'},
+   {n:'みりん',q:1,u:'大さじ',c:'season'},{n:'砂糖',q:1,u:'小さじ',c:'season'},
+   {n:'だし汁',q:100,u:'ml',c:'season'}]},
+ {name:'豚の生姜焼き', genre:'主菜（和食）', items:[
+   {n:'豚ロース薄切り肉',q:100,u:'g',c:'meat'},{n:'玉ねぎ',q:0.25,u:'個',c:'veg'},
+   {n:'しょうが',q:0.5,u:'かけ',c:'veg'},{n:'キャベツ',q:50,u:'g',c:'veg'},
+   {n:'しょうゆ',q:1,u:'大さじ',c:'season'},{n:'みりん',q:0.5,u:'大さじ',c:'season'},
+   {n:'酒',q:0.5,u:'大さじ',c:'season'}]},
+ {name:'ハンバーグ', genre:'主菜（洋食）', items:[
+   {n:'合いびき肉',q:120,u:'g',c:'meat'},{n:'玉ねぎ',q:0.25,u:'個',c:'veg'},
+   {n:'パン粉',q:2,u:'大さじ',c:'staple'},{n:'牛乳',q:15,u:'ml',c:'dairy'},
+   {n:'卵',q:0.25,u:'個',c:'dairy'},{n:'ケチャップ',q:1,u:'大さじ',c:'season'},
+   {n:'中濃ソース',q:1,u:'大さじ',c:'season'}]},
+ {name:'鶏の唐揚げ', genre:'主菜（和食）', items:[
+   {n:'鶏もも肉',q:150,u:'g',c:'meat'},{n:'しょうゆ',q:0.5,u:'大さじ',c:'season'},
+   {n:'酒',q:0.5,u:'大さじ',c:'season'},{n:'しょうが',q:0.5,u:'かけ',c:'veg'},
+   {n:'にんにく',q:0.5,u:'かけ',c:'veg'},{n:'片栗粉',q:2,u:'大さじ',c:'staple'},
+   {n:'揚げ油',q:0,u:'適量',c:'season'}]},
+ {name:'鶏の照り焼き', genre:'主菜（和食）', items:[
+   {n:'鶏もも肉',q:150,u:'g',c:'meat'},{n:'しょうゆ',q:1,u:'大さじ',c:'season'},
+   {n:'みりん',q:1,u:'大さじ',c:'season'},{n:'酒',q:0.5,u:'大さじ',c:'season'},
+   {n:'砂糖',q:1,u:'小さじ',c:'season'}]},
+ {name:'味噌汁（豆腐とわかめ）', genre:'汁物・スープ', items:[
+   {n:'味噌',q:1,u:'大さじ',c:'season'},{n:'だし汁',q:150,u:'ml',c:'season'},
+   {n:'豆腐',q:50,u:'g',c:'dairy'},{n:'乾燥わかめ',q:1,u:'g',c:'other'},
+   {n:'長ねぎ',q:0.1,u:'本',c:'veg'}]},
+ {name:'豚汁', genre:'汁物・スープ', items:[
+   {n:'豚こま切れ肉',q:40,u:'g',c:'meat'},{n:'大根',q:50,u:'g',c:'veg'},
+   {n:'にんじん',q:0.2,u:'本',c:'veg'},{n:'ごぼう',q:0.25,u:'本',c:'veg'},
+   {n:'こんにゃく',q:50,u:'g',c:'other'},{n:'長ねぎ',q:0.25,u:'本',c:'veg'},
+   {n:'味噌',q:1,u:'大さじ',c:'season'},{n:'だし汁',q:200,u:'ml',c:'season'}]},
+ {name:'親子丼', genre:'主菜（和食）', items:[
+   {n:'米',q:0.5,u:'合',c:'staple'},{n:'鶏もも肉',q:80,u:'g',c:'meat'},
+   {n:'玉ねぎ',q:0.25,u:'個',c:'veg'},{n:'卵',q:1.5,u:'個',c:'dairy'},
+   {n:'めんつゆ',q:2,u:'大さじ',c:'season'}]},
+ {name:'牛丼', genre:'主菜（和食）', items:[
+   {n:'米',q:0.5,u:'合',c:'staple'},{n:'牛薄切り肉',q:100,u:'g',c:'meat'},
+   {n:'玉ねぎ',q:0.5,u:'個',c:'veg'},{n:'しょうゆ',q:1,u:'大さじ',c:'season'},
+   {n:'みりん',q:1,u:'大さじ',c:'season'},{n:'砂糖',q:1,u:'小さじ',c:'season'},
+   {n:'だし汁',q:100,u:'ml',c:'season'}]},
+ {name:'麻婆豆腐', genre:'主菜（中華・アジア）', items:[
+   {n:'豆腐',q:150,u:'g',c:'dairy'},{n:'豚ひき肉',q:50,u:'g',c:'meat'},
+   {n:'長ねぎ',q:0.25,u:'本',c:'veg'},{n:'にんにく',q:0.5,u:'かけ',c:'veg'},
+   {n:'しょうが',q:0.5,u:'かけ',c:'veg'},{n:'豆板醤',q:0.5,u:'小さじ',c:'season'},
+   {n:'味噌',q:1,u:'小さじ',c:'season'},{n:'しょうゆ',q:1,u:'小さじ',c:'season'},
+   {n:'鶏がらスープの素',q:0.5,u:'小さじ',c:'season'},{n:'片栗粉',q:1,u:'小さじ',c:'staple'}]},
+ {name:'野菜炒め', genre:'主菜（中華・アジア）', items:[
+   {n:'豚こま切れ肉',q:60,u:'g',c:'meat'},{n:'キャベツ',q:100,u:'g',c:'veg'},
+   {n:'もやし',q:50,u:'g',c:'veg'},{n:'にんじん',q:0.2,u:'本',c:'veg'},
+   {n:'ピーマン',q:0.5,u:'個',c:'veg'},{n:'しょうゆ',q:1,u:'小さじ',c:'season'},
+   {n:'塩こしょう',q:0,u:'適量',c:'season'},{n:'サラダ油',q:0.5,u:'大さじ',c:'season'}]},
+ {name:'餃子', genre:'主菜（中華・アジア）', items:[
+   {n:'豚ひき肉',q:75,u:'g',c:'meat'},{n:'キャベツ',q:75,u:'g',c:'veg'},
+   {n:'にら',q:0.25,u:'束',c:'veg'},{n:'餃子の皮',q:12,u:'枚',c:'staple'},
+   {n:'にんにく',q:0.5,u:'かけ',c:'veg'},{n:'しょうが',q:0.5,u:'かけ',c:'veg'},
+   {n:'しょうゆ',q:1,u:'小さじ',c:'season'},{n:'ごま油',q:1,u:'小さじ',c:'season'}]},
+ {name:'チャーハン', genre:'主菜（中華・アジア）', items:[
+   {n:'米',q:0.5,u:'合',c:'staple'},{n:'卵',q:1,u:'個',c:'dairy'},
+   {n:'長ねぎ',q:0.25,u:'本',c:'veg'},{n:'ハム',q:2,u:'枚',c:'meat'},
+   {n:'しょうゆ',q:1,u:'小さじ',c:'season'},{n:'鶏がらスープの素',q:0.5,u:'小さじ',c:'season'},
+   {n:'サラダ油',q:0.5,u:'大さじ',c:'season'}]},
+ {name:'鮭の塩焼き', genre:'主菜（和食）', items:[
+   {n:'生鮭',q:1,u:'切れ',c:'meat'},{n:'塩',q:0,u:'適量',c:'season'},
+   {n:'大根（おろし用）',q:50,u:'g',c:'veg'}]},
+ {name:'さばの味噌煮', genre:'主菜（和食）', items:[
+   {n:'さば',q:1,u:'切れ',c:'meat'},{n:'味噌',q:1,u:'大さじ',c:'season'},
+   {n:'砂糖',q:0.5,u:'大さじ',c:'season'},{n:'みりん',q:0.5,u:'大さじ',c:'season'},
+   {n:'酒',q:1,u:'大さじ',c:'season'},{n:'しょうが',q:0.5,u:'かけ',c:'veg'}]},
+ {name:'オムライス', genre:'主菜（洋食）', items:[
+   {n:'米',q:0.5,u:'合',c:'staple'},{n:'鶏もも肉',q:50,u:'g',c:'meat'},
+   {n:'玉ねぎ',q:0.25,u:'個',c:'veg'},{n:'卵',q:2,u:'個',c:'dairy'},
+   {n:'ケチャップ',q:2,u:'大さじ',c:'season'},{n:'バター',q:10,u:'g',c:'dairy'}]},
+ {name:'スパゲッティミートソース', genre:'主菜（洋食）', items:[
+   {n:'スパゲッティ',q:100,u:'g',c:'staple'},{n:'合いびき肉',q:80,u:'g',c:'meat'},
+   {n:'玉ねぎ',q:0.25,u:'個',c:'veg'},{n:'にんじん',q:0.1,u:'本',c:'veg'},
+   {n:'カットトマト缶',q:0.25,u:'缶',c:'veg'},{n:'にんにく',q:0.5,u:'かけ',c:'veg'},
+   {n:'ケチャップ',q:1,u:'大さじ',c:'season'},{n:'ウスターソース',q:1,u:'小さじ',c:'season'},
+   {n:'オリーブオイル',q:0.5,u:'大さじ',c:'season'}]},
+ {name:'カルボナーラ', genre:'主菜（洋食）', items:[
+   {n:'スパゲッティ',q:100,u:'g',c:'staple'},{n:'ベーコン',q:40,u:'g',c:'meat'},
+   {n:'卵',q:1,u:'個',c:'dairy'},{n:'粉チーズ',q:2,u:'大さじ',c:'dairy'},
+   {n:'牛乳',q:50,u:'ml',c:'dairy'},{n:'黒こしょう',q:0,u:'適量',c:'season'}]},
+ {name:'クリームシチュー', genre:'主菜（洋食）', items:[
+   {n:'鶏もも肉',q:80,u:'g',c:'meat'},{n:'じゃがいも',q:0.5,u:'個',c:'veg'},
+   {n:'にんじん',q:0.25,u:'本',c:'veg'},{n:'玉ねぎ',q:0.5,u:'個',c:'veg'},
+   {n:'ブロッコリー',q:30,u:'g',c:'veg'},{n:'シチュールー',q:25,u:'g',c:'season'},
+   {n:'牛乳',q:50,u:'ml',c:'dairy'}]},
+ {name:'焼きうどん', genre:'主菜（和食）', items:[
+   {n:'ゆでうどん',q:1,u:'玉',c:'staple'},{n:'豚こま切れ肉',q:50,u:'g',c:'meat'},
+   {n:'キャベツ',q:50,u:'g',c:'veg'},{n:'にんじん',q:0.1,u:'本',c:'veg'},
+   {n:'玉ねぎ',q:0.25,u:'個',c:'veg'},{n:'ウスターソース',q:1,u:'大さじ',c:'season'},
+   {n:'かつお節',q:0,u:'適量',c:'other'}]},
+ {name:'ポテトサラダ', genre:'副菜・小鉢', items:[
+   {n:'じゃがいも',q:1,u:'個',c:'veg'},{n:'きゅうり',q:0.25,u:'本',c:'veg'},
+   {n:'にんじん',q:0.1,u:'本',c:'veg'},{n:'ハム',q:1,u:'枚',c:'meat'},
+   {n:'マヨネーズ',q:1.5,u:'大さじ',c:'season'},{n:'塩こしょう',q:0,u:'適量',c:'season'}]},
+ {name:'グリーンサラダ', genre:'副菜・小鉢', items:[
+   {n:'レタス',q:50,u:'g',c:'veg'},{n:'きゅうり',q:0.25,u:'本',c:'veg'},
+   {n:'トマト',q:0.5,u:'個',c:'veg'},{n:'ドレッシング',q:0,u:'適量',c:'season'}]},
+ {name:'だし巻き卵', genre:'副菜・小鉢', items:[
+   {n:'卵',q:1.5,u:'個',c:'dairy'},{n:'だし汁',q:15,u:'ml',c:'season'},
+   {n:'砂糖',q:0.5,u:'小さじ',c:'season'},{n:'塩',q:0,u:'適量',c:'season'},
+   {n:'サラダ油',q:0.5,u:'小さじ',c:'season'}]},
+
+ /* ---- 5月のお昼メニュー対応で追加（主菜） ---- */
+ {name:'コロッケ', genre:'主菜（洋食）', items:[
+   {n:'じゃがいも',q:1,u:'個',c:'veg'},{n:'合いびき肉',q:30,u:'g',c:'meat'},
+   {n:'玉ねぎ',q:0.25,u:'個',c:'veg'},{n:'小麦粉',q:1,u:'大さじ',c:'staple'},
+   {n:'卵',q:0.25,u:'個',c:'dairy'},{n:'パン粉',q:3,u:'大さじ',c:'staple'},
+   {n:'揚げ油',q:0,u:'適量',c:'season'}]},
+ {name:'チキンカレー', genre:'主菜（洋食）', items:[
+   {n:'米',q:0.5,u:'合',c:'staple'},{n:'鶏もも肉',q:100,u:'g',c:'meat'},
+   {n:'玉ねぎ',q:0.5,u:'個',c:'veg'},{n:'にんじん',q:0.25,u:'本',c:'veg'},
+   {n:'カレールー',q:25,u:'g',c:'season'},{n:'サラダ油',q:0.5,u:'小さじ',c:'season'}]},
+ {name:'鶏のトマト煮', genre:'主菜（洋食）', items:[
+   {n:'鶏もも肉',q:120,u:'g',c:'meat'},{n:'玉ねぎ',q:0.25,u:'個',c:'veg'},
+   {n:'カットトマト缶',q:0.25,u:'缶',c:'veg'},{n:'にんにく',q:0.5,u:'かけ',c:'veg'},
+   {n:'コンソメ',q:0.5,u:'個',c:'season'},{n:'オリーブオイル',q:1,u:'小さじ',c:'season'}]},
+ {name:'ざるそば', genre:'主菜（和食）', items:[
+   {n:'そば（乾麺）',q:100,u:'g',c:'staple'},{n:'めんつゆ',q:50,u:'ml',c:'season'},
+   {n:'長ねぎ',q:0.1,u:'本',c:'veg'},{n:'刻みのり',q:0,u:'適量',c:'other'},
+   {n:'わさび',q:0,u:'適量',c:'season'}]},
+ {name:'天ぷら', genre:'主菜（和食）', items:[
+   {n:'えび',q:2,u:'尾',c:'meat'},{n:'なす',q:0.25,u:'本',c:'veg'},
+   {n:'かぼちゃ',q:30,u:'g',c:'veg'},{n:'小麦粉',q:3,u:'大さじ',c:'staple'},
+   {n:'卵',q:0.25,u:'個',c:'dairy'},{n:'揚げ油',q:0,u:'適量',c:'season'},
+   {n:'めんつゆ',q:30,u:'ml',c:'season'}]},
+ {name:'豚しゃぶ', genre:'主菜（和食）', items:[
+   {n:'豚しゃぶしゃぶ用肉',q:100,u:'g',c:'meat'},{n:'レタス',q:50,u:'g',c:'veg'},
+   {n:'きゅうり',q:0.25,u:'本',c:'veg'},{n:'ポン酢',q:1,u:'大さじ',c:'season'},
+   {n:'白ごま',q:0,u:'適量',c:'season'}]},
+ {name:'鶏の甘辛煮', genre:'主菜（和食）', items:[
+   {n:'鶏もも肉',q:120,u:'g',c:'meat'},{n:'しょうゆ',q:1,u:'大さじ',c:'season'},
+   {n:'みりん',q:1,u:'大さじ',c:'season'},{n:'砂糖',q:1,u:'小さじ',c:'season'},
+   {n:'しょうが',q:0.5,u:'かけ',c:'veg'}]},
+ {name:'ぶり照り焼き', genre:'主菜（和食）', items:[
+   {n:'ぶり',q:1,u:'切れ',c:'meat'},{n:'しょうゆ',q:1,u:'大さじ',c:'season'},
+   {n:'みりん',q:1,u:'大さじ',c:'season'},{n:'砂糖',q:1,u:'小さじ',c:'season'},
+   {n:'サラダ油',q:0.5,u:'小さじ',c:'season'}]},
+ {name:'鯖の塩焼き', genre:'主菜（和食）', items:[
+   {n:'さば',q:1,u:'切れ',c:'meat'},{n:'塩',q:0,u:'適量',c:'season'},
+   {n:'大根（おろし用）',q:50,u:'g',c:'veg'}]},
+ {name:'鮭のホイル焼き', genre:'主菜（和食）', items:[
+   {n:'生鮭',q:1,u:'切れ',c:'meat'},{n:'玉ねぎ',q:0.25,u:'個',c:'veg'},
+   {n:'しめじ',q:30,u:'g',c:'veg'},{n:'バター',q:10,u:'g',c:'dairy'},
+   {n:'酒',q:1,u:'小さじ',c:'season'},{n:'塩こしょう',q:0,u:'適量',c:'season'}]},
+ {name:'焼肉定食', genre:'主菜（和食）', items:[
+   {n:'米',q:0.5,u:'合',c:'staple'},{n:'焼肉用牛肉',q:100,u:'g',c:'meat'},
+   {n:'玉ねぎ',q:0.25,u:'個',c:'veg'},{n:'ピーマン',q:0.5,u:'個',c:'veg'},
+   {n:'焼肉のたれ',q:1.5,u:'大さじ',c:'season'}]},
+ {name:'豚肉の塩だれ炒め', genre:'主菜（中華・アジア）', items:[
+   {n:'豚こま切れ肉',q:100,u:'g',c:'meat'},{n:'長ねぎ',q:0.25,u:'本',c:'veg'},
+   {n:'にんにく',q:0.5,u:'かけ',c:'veg'},{n:'鶏がらスープの素',q:0.5,u:'小さじ',c:'season'},
+   {n:'ごま油',q:1,u:'小さじ',c:'season'},{n:'レモン汁',q:1,u:'小さじ',c:'season'},
+   {n:'塩',q:0,u:'適量',c:'season'}]},
+ {name:'ガパオライス', genre:'主菜（中華・アジア）', items:[
+   {n:'米',q:0.5,u:'合',c:'staple'},{n:'鶏ひき肉',q:100,u:'g',c:'meat'},
+   {n:'ピーマン',q:0.5,u:'個',c:'veg'},{n:'パプリカ',q:0.25,u:'個',c:'veg'},
+   {n:'玉ねぎ',q:0.25,u:'個',c:'veg'},{n:'にんにく',q:0.5,u:'かけ',c:'veg'},
+   {n:'卵',q:1,u:'個',c:'dairy'},{n:'オイスターソース',q:0.5,u:'大さじ',c:'season'},
+   {n:'ナンプラー',q:1,u:'小さじ',c:'season'},{n:'バジル',q:0,u:'適量',c:'veg'}]},
+ {name:'中華あんかけご飯', genre:'主菜（中華・アジア）', items:[
+   {n:'米',q:0.5,u:'合',c:'staple'},{n:'豚こま切れ肉',q:60,u:'g',c:'meat'},
+   {n:'白菜',q:80,u:'g',c:'veg'},{n:'にんじん',q:0.1,u:'本',c:'veg'},
+   {n:'しいたけ',q:1,u:'枚',c:'veg'},{n:'片栗粉',q:2,u:'小さじ',c:'staple'},
+   {n:'鶏がらスープの素',q:1,u:'小さじ',c:'season'},{n:'オイスターソース',q:1,u:'小さじ',c:'season'},
+   {n:'ごま油',q:0.5,u:'小さじ',c:'season'}]},
+ {name:'エビチリ', genre:'主菜（中華・アジア）', items:[
+   {n:'むきえび',q:100,u:'g',c:'meat'},{n:'長ねぎ',q:0.25,u:'本',c:'veg'},
+   {n:'にんにく',q:0.5,u:'かけ',c:'veg'},{n:'しょうが',q:0.5,u:'かけ',c:'veg'},
+   {n:'ケチャップ',q:1.5,u:'大さじ',c:'season'},{n:'豆板醤',q:0.5,u:'小さじ',c:'season'},
+   {n:'鶏がらスープの素',q:0.5,u:'小さじ',c:'season'},{n:'片栗粉',q:1,u:'小さじ',c:'staple'},
+   {n:'サラダ油',q:0.5,u:'大さじ',c:'season'}]},
+ {name:'冷やし中華', genre:'主菜（中華・アジア）', items:[
+   {n:'中華麺',q:1,u:'玉',c:'staple'},{n:'ハム',q:2,u:'枚',c:'meat'},
+   {n:'きゅうり',q:0.25,u:'本',c:'veg'},{n:'トマト',q:0.25,u:'個',c:'veg'},
+   {n:'卵',q:1,u:'個',c:'dairy'},{n:'冷やし中華のたれ',q:1,u:'袋',c:'season'}]},
+ {name:'ビビンバ', genre:'主菜（中華・アジア）', items:[
+   {n:'米',q:0.5,u:'合',c:'staple'},{n:'牛ひき肉',q:60,u:'g',c:'meat'},
+   {n:'もやし',q:40,u:'g',c:'veg'},{n:'ほうれん草',q:30,u:'g',c:'veg'},
+   {n:'にんじん',q:0.1,u:'本',c:'veg'},{n:'卵',q:1,u:'個',c:'dairy'},
+   {n:'コチュジャン',q:1,u:'小さじ',c:'season'},{n:'ごま油',q:1,u:'小さじ',c:'season'},
+   {n:'しょうゆ',q:1,u:'小さじ',c:'season'},{n:'砂糖',q:0.5,u:'小さじ',c:'season'}]},
+
+ /* ---- 5月のお昼メニュー対応で追加（副菜・小鉢） ---- */
+ {name:'ちくわ磯辺焼き', genre:'副菜・小鉢', items:[
+   {n:'ちくわ',q:1,u:'本',c:'meat'},{n:'小麦粉',q:0.5,u:'大さじ',c:'staple'},
+   {n:'青のり',q:0,u:'適量',c:'other'},{n:'サラダ油',q:0.5,u:'小さじ',c:'season'}]},
+ {name:'キャベツ和え', genre:'副菜・小鉢', items:[
+   {n:'キャベツ',q:60,u:'g',c:'veg'},{n:'ごま油',q:0.5,u:'小さじ',c:'season'},
+   {n:'塩',q:0,u:'適量',c:'season'},{n:'白ごま',q:0,u:'適量',c:'season'}]},
+ {name:'卵焼き', genre:'副菜・小鉢', items:[
+   {n:'卵',q:1,u:'個',c:'dairy'},{n:'砂糖',q:0.5,u:'小さじ',c:'season'},
+   {n:'塩',q:0,u:'適量',c:'season'},{n:'サラダ油',q:0.5,u:'小さじ',c:'season'}]},
+ {name:'春雨サラダ', genre:'副菜・小鉢', items:[
+   {n:'春雨',q:10,u:'g',c:'staple'},{n:'きゅうり',q:0.2,u:'本',c:'veg'},
+   {n:'ハム',q:0.5,u:'枚',c:'meat'},{n:'しょうゆ',q:1,u:'小さじ',c:'season'},
+   {n:'酢',q:1,u:'小さじ',c:'season'},{n:'ごま油',q:0.5,u:'小さじ',c:'season'},
+   {n:'砂糖',q:0.5,u:'小さじ',c:'season'}]},
+ {name:'ナムル', genre:'副菜・小鉢', items:[
+   {n:'もやし',q:50,u:'g',c:'veg'},{n:'ほうれん草',q:30,u:'g',c:'veg'},
+   {n:'にんじん',q:0.1,u:'本',c:'veg'},{n:'ごま油',q:1,u:'小さじ',c:'season'},
+   {n:'鶏がらスープの素',q:0.25,u:'小さじ',c:'season'},{n:'白ごま',q:0,u:'適量',c:'season'}]},
+ {name:'チヂミ', genre:'副菜・小鉢', items:[
+   {n:'小麦粉',q:30,u:'g',c:'staple'},{n:'片栗粉',q:0.5,u:'大さじ',c:'staple'},
+   {n:'卵',q:0.25,u:'個',c:'dairy'},{n:'にら',q:0.2,u:'束',c:'veg'},
+   {n:'ごま油',q:1,u:'小さじ',c:'season'}]},
+ {name:'キャベツ千切り', genre:'副菜・小鉢', items:[
+   {n:'キャベツ',q:60,u:'g',c:'veg'}]},
+ {name:'マカロニサラダ', genre:'副菜・小鉢', items:[
+   {n:'マカロニ',q:20,u:'g',c:'staple'},{n:'きゅうり',q:0.2,u:'本',c:'veg'},
+   {n:'ハム',q:0.5,u:'枚',c:'meat'},{n:'マヨネーズ',q:1,u:'大さじ',c:'season'},
+   {n:'塩こしょう',q:0,u:'適量',c:'season'}]},
+ {name:'コーン', genre:'副菜・小鉢', items:[
+   {n:'コーン缶',q:0.2,u:'缶',c:'veg'}]},
+ {name:'福神漬', genre:'副菜・小鉢', items:[
+   {n:'福神漬',q:15,u:'g',c:'other'}]},
+ {name:'紫キャベツマリネ', genre:'副菜・小鉢', items:[
+   {n:'紫キャベツ',q:50,u:'g',c:'veg'},{n:'酢',q:2,u:'小さじ',c:'season'},
+   {n:'砂糖',q:0.5,u:'小さじ',c:'season'},{n:'オリーブオイル',q:1,u:'小さじ',c:'season'},
+   {n:'塩',q:0,u:'適量',c:'season'}]},
+ {name:'ポテト', genre:'副菜・小鉢', items:[
+   {n:'じゃがいも',q:0.5,u:'個',c:'veg'},{n:'揚げ油',q:0,u:'適量',c:'season'},
+   {n:'塩',q:0,u:'適量',c:'season'}]},
+ {name:'小松菜和え', genre:'副菜・小鉢', items:[
+   {n:'小松菜',q:60,u:'g',c:'veg'},{n:'しょうゆ',q:1,u:'小さじ',c:'season'},
+   {n:'かつお節',q:0,u:'適量',c:'other'}]},
+ {name:'小松菜お浸し', genre:'副菜・小鉢', items:[
+   {n:'小松菜',q:60,u:'g',c:'veg'},{n:'しょうゆ',q:1,u:'小さじ',c:'season'},
+   {n:'だし汁',q:15,u:'ml',c:'season'},{n:'かつお節',q:0,u:'適量',c:'other'}]},
+ {name:'キャベツ塩昆布', genre:'副菜・小鉢', items:[
+   {n:'キャベツ',q:60,u:'g',c:'veg'},{n:'塩昆布',q:3,u:'g',c:'other'},
+   {n:'ごま油',q:0.5,u:'小さじ',c:'season'}]},
+ {name:'冷やしナス', genre:'副菜・小鉢', items:[
+   {n:'なす',q:1,u:'本',c:'veg'},{n:'めんつゆ',q:1,u:'大さじ',c:'season'},
+   {n:'しょうが',q:0.25,u:'かけ',c:'veg'}]},
+ {name:'卵サラダ', genre:'副菜・小鉢', items:[
+   {n:'卵',q:1,u:'個',c:'dairy'},{n:'きゅうり',q:0.1,u:'本',c:'veg'},
+   {n:'マヨネーズ',q:0.5,u:'大さじ',c:'season'},{n:'塩こしょう',q:0,u:'適量',c:'season'}]},
+ {name:'目玉焼き', genre:'副菜・小鉢', items:[
+   {n:'卵',q:1,u:'個',c:'dairy'},{n:'サラダ油',q:0.5,u:'小さじ',c:'season'}]},
+ {name:'キムチ', genre:'副菜・小鉢', items:[
+   {n:'キムチ',q:30,u:'g',c:'veg'}]},
+ {name:'春菊ごま和え', genre:'副菜・小鉢', items:[
+   {n:'春菊',q:60,u:'g',c:'veg'},{n:'白すりごま',q:0.5,u:'大さじ',c:'season'},
+   {n:'しょうゆ',q:1,u:'小さじ',c:'season'},{n:'砂糖',q:0.5,u:'小さじ',c:'season'}]},
+ {name:'春巻き', genre:'副菜・小鉢', items:[
+   {n:'春巻きの皮',q:1,u:'枚',c:'staple'},{n:'豚ひき肉',q:30,u:'g',c:'meat'},
+   {n:'キャベツ',q:30,u:'g',c:'veg'},{n:'春雨',q:5,u:'g',c:'staple'},
+   {n:'しょうゆ',q:0.5,u:'小さじ',c:'season'},{n:'ごま油',q:0.5,u:'小さじ',c:'season'},
+   {n:'揚げ油',q:0,u:'適量',c:'season'}]},
+ {name:'冷奴', genre:'副菜・小鉢', items:[
+   {n:'豆腐',q:100,u:'g',c:'dairy'},{n:'しょうゆ',q:1,u:'小さじ',c:'season'},
+   {n:'かつお節',q:0,u:'適量',c:'other'}]},
+ {name:'オムレツ', genre:'副菜・小鉢', items:[
+   {n:'卵',q:1.5,u:'個',c:'dairy'},{n:'牛乳',q:15,u:'ml',c:'dairy'},
+   {n:'バター',q:5,u:'g',c:'dairy'},{n:'塩こしょう',q:0,u:'適量',c:'season'}]},
+ {name:'揚げ出し豆腐', genre:'副菜・小鉢', items:[
+   {n:'豆腐',q:150,u:'g',c:'dairy'},{n:'片栗粉',q:1,u:'大さじ',c:'staple'},
+   {n:'めんつゆ',q:1.5,u:'大さじ',c:'season'},{n:'大根（おろし用）',q:30,u:'g',c:'veg'},
+   {n:'揚げ油',q:0,u:'適量',c:'season'}]},
+ {name:'白和え', genre:'副菜・小鉢', items:[
+   {n:'豆腐',q:50,u:'g',c:'dairy'},{n:'ほうれん草',q:40,u:'g',c:'veg'},
+   {n:'にんじん',q:0.1,u:'本',c:'veg'},{n:'白すりごま',q:0.5,u:'大さじ',c:'season'},
+   {n:'砂糖',q:0.5,u:'小さじ',c:'season'},{n:'しょうゆ',q:0.5,u:'小さじ',c:'season'}]},
+ {name:'ひじき煮', genre:'副菜・小鉢', items:[
+   {n:'乾燥ひじき',q:5,u:'g',c:'other'},{n:'にんじん',q:0.1,u:'本',c:'veg'},
+   {n:'油揚げ',q:0.25,u:'枚',c:'dairy'},{n:'しょうゆ',q:0.5,u:'大さじ',c:'season'},
+   {n:'みりん',q:0.5,u:'大さじ',c:'season'},{n:'砂糖',q:0.5,u:'小さじ',c:'season'},
+   {n:'だし汁',q:50,u:'ml',c:'season'}]},
+ {name:'中華サラダ', genre:'副菜・小鉢', items:[
+   {n:'きゅうり',q:0.3,u:'本',c:'veg'},{n:'トマト',q:0.25,u:'個',c:'veg'},
+   {n:'もやし',q:30,u:'g',c:'veg'},{n:'ごま油',q:1,u:'小さじ',c:'season'},
+   {n:'酢',q:1,u:'小さじ',c:'season'},{n:'しょうゆ',q:1,u:'小さじ',c:'season'},
+   {n:'砂糖',q:0.5,u:'小さじ',c:'season'}]},
+ {name:'味玉', genre:'副菜・小鉢', items:[
+   {n:'卵',q:1,u:'個',c:'dairy'},{n:'しょうゆ',q:0.5,u:'大さじ',c:'season'},
+   {n:'みりん',q:0.5,u:'大さじ',c:'season'}]},
+ {name:'大根おろし', genre:'副菜・小鉢', items:[
+   {n:'大根（おろし用）',q:80,u:'g',c:'veg'}]},
+ {name:'ブロッコリー', genre:'副菜・小鉢', items:[
+   {n:'ブロッコリー',q:60,u:'g',c:'veg'},{n:'マヨネーズ',q:0,u:'適量',c:'season'}]},
+ {name:'人参ラペ', genre:'副菜・小鉢', items:[
+   {n:'にんじん',q:0.3,u:'本',c:'veg'},{n:'酢',q:1,u:'小さじ',c:'season'},
+   {n:'オリーブオイル',q:1,u:'小さじ',c:'season'},{n:'砂糖',q:0.5,u:'小さじ',c:'season'},
+   {n:'塩',q:0,u:'適量',c:'season'}]},
+
+ /* ---- 5月のお昼メニュー対応で追加（汁物・デザート） ---- */
+ {name:'中華スープ', genre:'汁物・スープ', items:[
+   {n:'卵',q:0.25,u:'個',c:'dairy'},{n:'長ねぎ',q:0.1,u:'本',c:'veg'},
+   {n:'鶏がらスープの素',q:1,u:'小さじ',c:'season'},{n:'ごま油',q:0,u:'適量',c:'season'}]},
+ {name:'コンソメスープ', genre:'汁物・スープ', items:[
+   {n:'コンソメ',q:0.5,u:'個',c:'season'},{n:'玉ねぎ',q:0.15,u:'個',c:'veg'},
+   {n:'ベーコン',q:10,u:'g',c:'meat'},{n:'パセリ',q:0,u:'適量',c:'veg'}]},
+ {name:'わかめスープ', genre:'汁物・スープ', items:[
+   {n:'乾燥わかめ',q:1,u:'g',c:'other'},{n:'長ねぎ',q:0.1,u:'本',c:'veg'},
+   {n:'鶏がらスープの素',q:1,u:'小さじ',c:'season'},{n:'ごま油',q:0.25,u:'小さじ',c:'season'},
+   {n:'白ごま',q:0,u:'適量',c:'season'}]},
+ {name:'ヨーグルト', genre:'デザート他', items:[
+   {n:'ヨーグルト',q:1,u:'個',c:'dairy'}]},
+
+ /* ---- 6月のお昼メニュー対応で追加（主菜） ---- */
+ {name:'鮭の塩麹焼き', genre:'主菜（和食）', items:[
+   {n:'生鮭',q:1,u:'切れ',c:'meat'},{n:'塩麹',q:0.5,u:'大さじ',c:'season'}]},
+ {name:'鶏団子と野菜の甘酢あん', genre:'主菜（中華・アジア）', items:[
+   {n:'鶏ひき肉',q:80,u:'g',c:'meat'},{n:'玉ねぎ',q:0.25,u:'個',c:'veg'},
+   {n:'にんじん',q:0.15,u:'本',c:'veg'},{n:'ピーマン',q:0.5,u:'個',c:'veg'},
+   {n:'片栗粉',q:2,u:'小さじ',c:'staple'},{n:'酢',q:0.5,u:'大さじ',c:'season'},
+   {n:'砂糖',q:0.5,u:'大さじ',c:'season'},{n:'しょうゆ',q:0.5,u:'大さじ',c:'season'},
+   {n:'ケチャップ',q:0.5,u:'大さじ',c:'season'}]},
+ {name:'豚肉とれんこんの炒め煮', genre:'主菜（和食）', items:[
+   {n:'豚こま切れ肉',q:80,u:'g',c:'meat'},{n:'れんこん',q:60,u:'g',c:'veg'},
+   {n:'にんじん',q:0.15,u:'本',c:'veg'},{n:'しょうゆ',q:1,u:'大さじ',c:'season'},
+   {n:'みりん',q:1,u:'大さじ',c:'season'},{n:'砂糖',q:0.5,u:'小さじ',c:'season'},
+   {n:'サラダ油',q:1,u:'小さじ',c:'season'}]},
+ {name:'鶏のカシューナッツ炒め', genre:'主菜（中華・アジア）', items:[
+   {n:'鶏もも肉',q:100,u:'g',c:'meat'},{n:'カシューナッツ',q:15,u:'g',c:'other'},
+   {n:'ピーマン',q:0.5,u:'個',c:'veg'},{n:'パプリカ',q:0.25,u:'個',c:'veg'},
+   {n:'長ねぎ',q:0.25,u:'本',c:'veg'},{n:'オイスターソース',q:1,u:'小さじ',c:'season'},
+   {n:'しょうゆ',q:1,u:'小さじ',c:'season'},{n:'酒',q:1,u:'小さじ',c:'season'},
+   {n:'片栗粉',q:1,u:'小さじ',c:'staple'},{n:'サラダ油',q:1,u:'小さじ',c:'season'}]},
+ {name:'豚汁定食', genre:'主菜（和食）', items:[
+   {n:'米',q:0.5,u:'合',c:'staple'},{n:'豚こま切れ肉',q:40,u:'g',c:'meat'},
+   {n:'大根',q:50,u:'g',c:'veg'},{n:'にんじん',q:0.2,u:'本',c:'veg'},
+   {n:'ごぼう',q:0.25,u:'本',c:'veg'},{n:'こんにゃく',q:50,u:'g',c:'other'},
+   {n:'長ねぎ',q:0.25,u:'本',c:'veg'},{n:'味噌',q:1,u:'大さじ',c:'season'},
+   {n:'だし汁',q:200,u:'ml',c:'season'}]},
+ {name:'野菜のかき揚げ', genre:'主菜（和食）', items:[
+   {n:'玉ねぎ',q:0.25,u:'個',c:'veg'},{n:'にんじん',q:0.15,u:'本',c:'veg'},
+   {n:'ごぼう',q:0.15,u:'本',c:'veg'},{n:'小麦粉',q:3,u:'大さじ',c:'staple'},
+   {n:'卵',q:0.25,u:'個',c:'dairy'},{n:'揚げ油',q:0,u:'適量',c:'season'},
+   {n:'めんつゆ',q:30,u:'ml',c:'season'}]},
+ {name:'豚肉となすの味噌炒め', genre:'主菜（和食）', items:[
+   {n:'豚こま切れ肉',q:80,u:'g',c:'meat'},{n:'なす',q:1,u:'本',c:'veg'},
+   {n:'ピーマン',q:0.5,u:'個',c:'veg'},{n:'味噌',q:1,u:'大さじ',c:'season'},
+   {n:'みりん',q:0.5,u:'大さじ',c:'season'},{n:'砂糖',q:1,u:'小さじ',c:'season'},
+   {n:'サラダ油',q:1,u:'小さじ',c:'season'}]},
+ {name:'とり天（おろしポン酢）', genre:'主菜（和食）', items:[
+   {n:'鶏むね肉',q:100,u:'g',c:'meat'},{n:'小麦粉',q:1,u:'大さじ',c:'staple'},
+   {n:'片栗粉',q:1,u:'大さじ',c:'staple'},{n:'卵',q:0.25,u:'個',c:'dairy'},
+   {n:'大根（おろし用）',q:50,u:'g',c:'veg'},{n:'ポン酢',q:1,u:'大さじ',c:'season'},
+   {n:'揚げ油',q:0,u:'適量',c:'season'}]},
+ {name:'鶏のゆず胡椒焼き', genre:'主菜（和食）', items:[
+   {n:'鶏もも肉',q:120,u:'g',c:'meat'},{n:'ゆず胡椒',q:0.5,u:'小さじ',c:'season'},
+   {n:'酒',q:1,u:'小さじ',c:'season'},{n:'しょうゆ',q:1,u:'小さじ',c:'season'},
+   {n:'サラダ油',q:0.5,u:'小さじ',c:'season'}]},
+ {name:'牛肉と春雨の炒め煮', genre:'主菜（中華・アジア）', items:[
+   {n:'牛薄切り肉',q:80,u:'g',c:'meat'},{n:'春雨',q:15,u:'g',c:'staple'},
+   {n:'玉ねぎ',q:0.25,u:'個',c:'veg'},{n:'にんじん',q:0.1,u:'本',c:'veg'},
+   {n:'にら',q:0.1,u:'束',c:'veg'},{n:'しょうゆ',q:1,u:'大さじ',c:'season'},
+   {n:'砂糖',q:1,u:'小さじ',c:'season'},{n:'オイスターソース',q:1,u:'小さじ',c:'season'},
+   {n:'ごま油',q:1,u:'小さじ',c:'season'}]},
+ {name:'和風カレーうどん', genre:'主菜（和食）', items:[
+   {n:'ゆでうどん',q:1,u:'玉',c:'staple'},{n:'豚こま切れ肉',q:50,u:'g',c:'meat'},
+   {n:'玉ねぎ',q:0.25,u:'個',c:'veg'},{n:'長ねぎ',q:0.1,u:'本',c:'veg'},
+   {n:'カレールー',q:20,u:'g',c:'season'},{n:'めんつゆ',q:1.5,u:'大さじ',c:'season'},
+   {n:'片栗粉',q:1,u:'小さじ',c:'staple'}]},
+ {name:'牛肉と野菜の味噌炒め', genre:'主菜（和食）', items:[
+   {n:'牛薄切り肉',q:80,u:'g',c:'meat'},{n:'キャベツ',q:80,u:'g',c:'veg'},
+   {n:'ピーマン',q:0.5,u:'個',c:'veg'},{n:'にんじん',q:0.1,u:'本',c:'veg'},
+   {n:'味噌',q:1,u:'大さじ',c:'season'},{n:'みりん',q:0.5,u:'大さじ',c:'season'},
+   {n:'砂糖',q:1,u:'小さじ',c:'season'},{n:'サラダ油',q:1,u:'小さじ',c:'season'}]},
+ {name:'白身魚のチリソース', genre:'主菜（中華・アジア）', items:[
+   {n:'白身魚（たら等）',q:1,u:'切れ',c:'meat'},{n:'長ねぎ',q:0.25,u:'本',c:'veg'},
+   {n:'にんにく',q:0.5,u:'かけ',c:'veg'},{n:'しょうが',q:0.5,u:'かけ',c:'veg'},
+   {n:'ケチャップ',q:1.5,u:'大さじ',c:'season'},{n:'豆板醤',q:0.5,u:'小さじ',c:'season'},
+   {n:'鶏がらスープの素',q:0.5,u:'小さじ',c:'season'},{n:'片栗粉',q:1,u:'大さじ',c:'staple'},
+   {n:'砂糖',q:1,u:'小さじ',c:'season'},{n:'サラダ油',q:0.5,u:'大さじ',c:'season'}]},
+
+ /* ---- 6月のお昼メニュー対応で追加（副菜・小鉢） ---- */
+ {name:'里芋の白煮', genre:'副菜・小鉢', items:[
+   {n:'里芋',q:2,u:'個',c:'veg'},{n:'だし汁',q:100,u:'ml',c:'season'},
+   {n:'しょうゆ',q:1,u:'小さじ',c:'season'},{n:'みりん',q:1,u:'小さじ',c:'season'},
+   {n:'砂糖',q:0.5,u:'小さじ',c:'season'}]},
+ {name:'小松菜の白和え', genre:'副菜・小鉢', items:[
+   {n:'小松菜',q:50,u:'g',c:'veg'},{n:'豆腐',q:40,u:'g',c:'dairy'},
+   {n:'白すりごま',q:0.5,u:'大さじ',c:'season'},{n:'砂糖',q:0.5,u:'小さじ',c:'season'},
+   {n:'しょうゆ',q:0.5,u:'小さじ',c:'season'}]},
+ {name:'かぶの浅漬け', genre:'副菜・小鉢', items:[
+   {n:'かぶ',q:0.5,u:'個',c:'veg'},{n:'塩昆布',q:2,u:'g',c:'other'},
+   {n:'塩',q:0,u:'適量',c:'season'}]},
+ {name:'春菊のお浸し', genre:'副菜・小鉢', items:[
+   {n:'春菊',q:60,u:'g',c:'veg'},{n:'しょうゆ',q:1,u:'小さじ',c:'season'},
+   {n:'だし汁',q:15,u:'ml',c:'season'},{n:'かつお節',q:0,u:'適量',c:'other'}]},
+ {name:'さつまいもレモン煮', genre:'副菜・小鉢', items:[
+   {n:'さつまいも',q:60,u:'g',c:'veg'},{n:'レモン汁',q:1,u:'小さじ',c:'season'},
+   {n:'砂糖',q:1,u:'小さじ',c:'season'}]},
+ {name:'れんこん金平', genre:'副菜・小鉢', items:[
+   {n:'れんこん',q:60,u:'g',c:'veg'},{n:'にんじん',q:0.1,u:'本',c:'veg'},
+   {n:'しょうゆ',q:1,u:'小さじ',c:'season'},{n:'みりん',q:1,u:'小さじ',c:'season'},
+   {n:'砂糖',q:0.5,u:'小さじ',c:'season'},{n:'ごま油',q:0.5,u:'小さじ',c:'season'},
+   {n:'白ごま',q:0,u:'適量',c:'season'}]},
+ {name:'大根の煮物', genre:'副菜・小鉢', items:[
+   {n:'大根',q:100,u:'g',c:'veg'},{n:'だし汁',q:150,u:'ml',c:'season'},
+   {n:'しょうゆ',q:1,u:'小さじ',c:'season'},{n:'みりん',q:1,u:'小さじ',c:'season'},
+   {n:'砂糖',q:0.5,u:'小さじ',c:'season'}]},
+ {name:'キャベツのごま和え', genre:'副菜・小鉢', items:[
+   {n:'キャベツ',q:60,u:'g',c:'veg'},{n:'白すりごま',q:0.5,u:'大さじ',c:'season'},
+   {n:'しょうゆ',q:1,u:'小さじ',c:'season'},{n:'砂糖',q:0.5,u:'小さじ',c:'season'}]},
+ {name:'白菜の浅漬け', genre:'副菜・小鉢', items:[
+   {n:'白菜',q:80,u:'g',c:'veg'},{n:'塩昆布',q:2,u:'g',c:'other'},
+   {n:'塩',q:0,u:'適量',c:'season'}]},
+ {name:'かぼちゃサラダ', genre:'副菜・小鉢', items:[
+   {n:'かぼちゃ',q:80,u:'g',c:'veg'},{n:'マヨネーズ',q:1,u:'大さじ',c:'season'},
+   {n:'塩こしょう',q:0,u:'適量',c:'season'}]},
+ {name:'もやしナムル', genre:'副菜・小鉢', items:[
+   {n:'もやし',q:80,u:'g',c:'veg'},{n:'ごま油',q:1,u:'小さじ',c:'season'},
+   {n:'鶏がらスープの素',q:0.25,u:'小さじ',c:'season'},{n:'白ごま',q:0,u:'適量',c:'season'}]},
+ {name:'ブロッコリーおかか和え', genre:'副菜・小鉢', items:[
+   {n:'ブロッコリー',q:60,u:'g',c:'veg'},{n:'しょうゆ',q:1,u:'小さじ',c:'season'},
+   {n:'かつお節',q:0,u:'適量',c:'other'}]},
+ {name:'じゃがいもの煮物', genre:'副菜・小鉢', items:[
+   {n:'じゃがいも',q:1,u:'個',c:'veg'},{n:'だし汁',q:100,u:'ml',c:'season'},
+   {n:'しょうゆ',q:1,u:'小さじ',c:'season'},{n:'みりん',q:1,u:'小さじ',c:'season'},
+   {n:'砂糖',q:0.5,u:'小さじ',c:'season'}]},
+ {name:'れんこんの炒め煮', genre:'副菜・小鉢', items:[
+   {n:'れんこん',q:70,u:'g',c:'veg'},{n:'にんじん',q:0.1,u:'本',c:'veg'},
+   {n:'しょうゆ',q:1.5,u:'小さじ',c:'season'},{n:'みりん',q:1,u:'小さじ',c:'season'},
+   {n:'砂糖',q:0.5,u:'小さじ',c:'season'},{n:'サラダ油',q:0.5,u:'小さじ',c:'season'}]},
+ {name:'卯の花', genre:'副菜・小鉢', items:[
+   {n:'おから',q:40,u:'g',c:'dairy'},{n:'にんじん',q:0.1,u:'本',c:'veg'},
+   {n:'長ねぎ',q:0.1,u:'本',c:'veg'},{n:'油揚げ',q:0.25,u:'枚',c:'dairy'},
+   {n:'だし汁',q:80,u:'ml',c:'season'},{n:'しょうゆ',q:1,u:'小さじ',c:'season'},
+   {n:'砂糖',q:1,u:'小さじ',c:'season'},{n:'サラダ油',q:0.5,u:'小さじ',c:'season'}]},
+ {name:'春菊の白和え', genre:'副菜・小鉢', items:[
+   {n:'春菊',q:50,u:'g',c:'veg'},{n:'豆腐',q:40,u:'g',c:'dairy'},
+   {n:'白すりごま',q:0.5,u:'大さじ',c:'season'},{n:'砂糖',q:0.5,u:'小さじ',c:'season'},
+   {n:'しょうゆ',q:0.5,u:'小さじ',c:'season'}]},
+ {name:'キャベツサラダ', genre:'副菜・小鉢', items:[
+   {n:'キャベツ',q:60,u:'g',c:'veg'},{n:'きゅうり',q:0.1,u:'本',c:'veg'},
+   {n:'コーン缶',q:0.1,u:'缶',c:'veg'},{n:'ドレッシング',q:0,u:'適量',c:'season'}]},
+ {name:'春菊のごま和え', genre:'副菜・小鉢', items:[
+   {n:'春菊',q:60,u:'g',c:'veg'},{n:'白すりごま',q:0.5,u:'大さじ',c:'season'},
+   {n:'しょうゆ',q:1,u:'小さじ',c:'season'},{n:'砂糖',q:0.5,u:'小さじ',c:'season'}]},
+ {name:'白菜のお浸し', genre:'副菜・小鉢', items:[
+   {n:'白菜',q:80,u:'g',c:'veg'},{n:'しょうゆ',q:1,u:'小さじ',c:'season'},
+   {n:'かつお節',q:0,u:'適量',c:'other'}]},
+ {name:'小松菜のごま和え', genre:'副菜・小鉢', items:[
+   {n:'小松菜',q:60,u:'g',c:'veg'},{n:'白すりごま',q:0.5,u:'大さじ',c:'season'},
+   {n:'しょうゆ',q:1,u:'小さじ',c:'season'},{n:'砂糖',q:0.5,u:'小さじ',c:'season'}]},
+ {name:'かぼちゃ煮', genre:'副菜・小鉢', items:[
+   {n:'かぼちゃ',q:80,u:'g',c:'veg'},{n:'だし汁',q:80,u:'ml',c:'season'},
+   {n:'しょうゆ',q:1,u:'小さじ',c:'season'},{n:'みりん',q:1,u:'小さじ',c:'season'},
+   {n:'砂糖',q:1,u:'小さじ',c:'season'}]},
+ {name:'さつまいもの甘煮', genre:'副菜・小鉢', items:[
+   {n:'さつまいも',q:60,u:'g',c:'veg'},{n:'砂糖',q:0.5,u:'大さじ',c:'season'},
+   {n:'みりん',q:1,u:'小さじ',c:'season'}]},
+ {name:'白菜のごま和え', genre:'副菜・小鉢', items:[
+   {n:'白菜',q:80,u:'g',c:'veg'},{n:'白すりごま',q:0.5,u:'大さじ',c:'season'},
+   {n:'しょうゆ',q:1,u:'小さじ',c:'season'},{n:'砂糖',q:0.5,u:'小さじ',c:'season'}]},
+ {name:'きゅうりの浅漬け', genre:'副菜・小鉢', items:[
+   {n:'きゅうり',q:0.5,u:'本',c:'veg'},{n:'塩昆布',q:1,u:'g',c:'other'},
+   {n:'塩',q:0,u:'適量',c:'season'}]},
+ {name:'ほうれん草のお浸し', genre:'副菜・小鉢', items:[
+   {n:'ほうれん草',q:60,u:'g',c:'veg'},{n:'しょうゆ',q:1,u:'小さじ',c:'season'},
+   {n:'かつお節',q:0,u:'適量',c:'other'}]},
+ {name:'れんこんの甘辛煮', genre:'副菜・小鉢', items:[
+   {n:'れんこん',q:70,u:'g',c:'veg'},{n:'しょうゆ',q:1.5,u:'小さじ',c:'season'},
+   {n:'みりん',q:1,u:'小さじ',c:'season'},{n:'砂糖',q:1,u:'小さじ',c:'season'},
+   {n:'ごま油',q:0.5,u:'小さじ',c:'season'}]},
+ {name:'れんこんの酢の物', genre:'副菜・小鉢', items:[
+   {n:'れんこん',q:50,u:'g',c:'veg'},{n:'酢',q:0.5,u:'大さじ',c:'season'},
+   {n:'砂糖',q:1,u:'小さじ',c:'season'},{n:'塩',q:0,u:'適量',c:'season'}]},
+ {name:'キャベツのナムル', genre:'副菜・小鉢', items:[
+   {n:'キャベツ',q:70,u:'g',c:'veg'},{n:'ごま油',q:1,u:'小さじ',c:'season'},
+   {n:'鶏がらスープの素',q:0.25,u:'小さじ',c:'season'},{n:'白ごま',q:0,u:'適量',c:'season'}]},
+ {name:'れんこんの梅和え', genre:'副菜・小鉢', items:[
+   {n:'れんこん',q:50,u:'g',c:'veg'},{n:'梅干し',q:0.5,u:'個',c:'other'},
+   {n:'みりん',q:0.5,u:'小さじ',c:'season'},{n:'かつお節',q:0,u:'適量',c:'other'}]},
+ {name:'かぼちゃと豆のサラダ', genre:'副菜・小鉢', items:[
+   {n:'かぼちゃ',q:60,u:'g',c:'veg'},{n:'ミックスビーンズ',q:20,u:'g',c:'other'},
+   {n:'マヨネーズ',q:1,u:'大さじ',c:'season'},{n:'塩こしょう',q:0,u:'適量',c:'season'}]},
+ {name:'切干大根とツナのサラダ', genre:'副菜・小鉢', items:[
+   {n:'切干大根',q:8,u:'g',c:'other'},{n:'ツナ缶',q:0.25,u:'缶',c:'meat'},
+   {n:'きゅうり',q:0.1,u:'本',c:'veg'},{n:'マヨネーズ',q:0.5,u:'大さじ',c:'season'},
+   {n:'しょうゆ',q:0.5,u:'小さじ',c:'season'}]},
+ {name:'ほうれん草の白和え', genre:'副菜・小鉢', items:[
+   {n:'ほうれん草',q:50,u:'g',c:'veg'},{n:'豆腐',q:40,u:'g',c:'dairy'},
+   {n:'白すりごま',q:0.5,u:'大さじ',c:'season'},{n:'砂糖',q:0.5,u:'小さじ',c:'season'},
+   {n:'しょうゆ',q:0.5,u:'小さじ',c:'season'}]},
+ {name:'かぶ葉の炒め物', genre:'副菜・小鉢', items:[
+   {n:'かぶの葉',q:50,u:'g',c:'veg'},{n:'ちりめんじゃこ',q:5,u:'g',c:'meat'},
+   {n:'ごま油',q:1,u:'小さじ',c:'season'},{n:'しょうゆ',q:1,u:'小さじ',c:'season'},
+   {n:'白ごま',q:0,u:'適量',c:'season'}]},
+ {name:'大根ステーキ', genre:'副菜・小鉢', items:[
+   {n:'大根',q:100,u:'g',c:'veg'},{n:'バター',q:5,u:'g',c:'dairy'},
+   {n:'しょうゆ',q:1,u:'小さじ',c:'season'},{n:'みりん',q:1,u:'小さじ',c:'season'}]},
+ {name:'もやしの梅おかか', genre:'副菜・小鉢', items:[
+   {n:'もやし',q:70,u:'g',c:'veg'},{n:'梅干し',q:0.5,u:'個',c:'other'},
+   {n:'かつお節',q:0,u:'適量',c:'other'},{n:'しょうゆ',q:0.5,u:'小さじ',c:'season'}]},
+ {name:'にんじんシリシリ', genre:'副菜・小鉢', items:[
+   {n:'にんじん',q:0.4,u:'本',c:'veg'},{n:'卵',q:0.5,u:'個',c:'dairy'},
+   {n:'ツナ缶',q:0.25,u:'缶',c:'meat'},{n:'しょうゆ',q:1,u:'小さじ',c:'season'},
+   {n:'サラダ油',q:1,u:'小さじ',c:'season'}]},
+ {name:'小松菜のクリーム和え', genre:'副菜・小鉢', items:[
+   {n:'小松菜',q:60,u:'g',c:'veg'},{n:'牛乳',q:30,u:'ml',c:'dairy'},
+   {n:'バター',q:5,u:'g',c:'dairy'},{n:'小麦粉',q:1,u:'小さじ',c:'staple'},
+   {n:'塩こしょう',q:0,u:'適量',c:'season'}]},
+ {name:'かぶのそぼろ炒め', genre:'副菜・小鉢', items:[
+   {n:'かぶ',q:0.5,u:'個',c:'veg'},{n:'鶏ひき肉',q:30,u:'g',c:'meat'},
+   {n:'しょうゆ',q:1,u:'小さじ',c:'season'},{n:'みりん',q:1,u:'小さじ',c:'season'},
+   {n:'片栗粉',q:0.5,u:'小さじ',c:'staple'},{n:'サラダ油',q:0.5,u:'小さじ',c:'season'}]},
+ {name:'れんこんの柚子風味', genre:'副菜・小鉢', items:[
+   {n:'れんこん',q:50,u:'g',c:'veg'},{n:'ゆず果汁',q:1,u:'小さじ',c:'season'},
+   {n:'酢',q:1,u:'小さじ',c:'season'},{n:'砂糖',q:0.5,u:'小さじ',c:'season'},
+   {n:'塩',q:0,u:'適量',c:'season'}]},
+ {name:'小松菜ソテー', genre:'副菜・小鉢', items:[
+   {n:'小松菜',q:60,u:'g',c:'veg'},{n:'ベーコン',q:10,u:'g',c:'meat'},
+   {n:'バター',q:5,u:'g',c:'dairy'},{n:'塩こしょう',q:0,u:'適量',c:'season'}]},
+ {name:'小松菜の白だし和え', genre:'副菜・小鉢', items:[
+   {n:'小松菜',q:60,u:'g',c:'veg'},{n:'白だし',q:1,u:'小さじ',c:'season'}]},
+ {name:'大根フライ', genre:'副菜・小鉢', items:[
+   {n:'大根',q:80,u:'g',c:'veg'},{n:'小麦粉',q:1,u:'大さじ',c:'staple'},
+   {n:'卵',q:0.25,u:'個',c:'dairy'},{n:'パン粉',q:2,u:'大さじ',c:'staple'},
+   {n:'揚げ油',q:0,u:'適量',c:'season'}]},
+ {name:'にんじんの塩麹和え', genre:'副菜・小鉢', items:[
+   {n:'にんじん',q:0.3,u:'本',c:'veg'},{n:'塩麹',q:1,u:'小さじ',c:'season'},
+   {n:'ごま油',q:0.5,u:'小さじ',c:'season'}]},
+ {name:'かぶの甘酢漬け', genre:'副菜・小鉢', items:[
+   {n:'かぶ',q:0.5,u:'個',c:'veg'},{n:'酢',q:0.5,u:'大さじ',c:'season'},
+   {n:'砂糖',q:1,u:'小さじ',c:'season'},{n:'塩',q:0,u:'適量',c:'season'}]},
+ {name:'じゃがいもガレット', genre:'副菜・小鉢', items:[
+   {n:'じゃがいも',q:1,u:'個',c:'veg'},{n:'片栗粉',q:1,u:'小さじ',c:'staple'},
+   {n:'粉チーズ',q:1,u:'小さじ',c:'dairy'},{n:'塩こしょう',q:0,u:'適量',c:'season'},
+   {n:'サラダ油',q:1,u:'小さじ',c:'season'}]},
+ {name:'白菜の中華炒め', genre:'副菜・小鉢', items:[
+   {n:'白菜',q:100,u:'g',c:'veg'},{n:'鶏がらスープの素',q:0.5,u:'小さじ',c:'season'},
+   {n:'オイスターソース',q:1,u:'小さじ',c:'season'},{n:'ごま油',q:1,u:'小さじ',c:'season'},
+   {n:'片栗粉',q:0.5,u:'小さじ',c:'staple'}]},
+ {name:'れんこんと枝豆のサラダ', genre:'副菜・小鉢', items:[
+   {n:'れんこん',q:50,u:'g',c:'veg'},{n:'むき枝豆',q:20,u:'g',c:'veg'},
+   {n:'マヨネーズ',q:0.5,u:'大さじ',c:'season'},{n:'塩こしょう',q:0,u:'適量',c:'season'}]},
+ {name:'長芋ののり塩和え', genre:'副菜・小鉢', items:[
+   {n:'長芋',q:60,u:'g',c:'veg'},{n:'青のり',q:0,u:'適量',c:'other'},
+   {n:'塩',q:0,u:'適量',c:'season'},{n:'ごま油',q:0.5,u:'小さじ',c:'season'}]},
+ {name:'温豆腐のごま香味だれ', genre:'副菜・小鉢', items:[
+   {n:'豆腐',q:150,u:'g',c:'dairy'},{n:'白すりごま',q:0.5,u:'大さじ',c:'season'},
+   {n:'しょうゆ',q:1,u:'小さじ',c:'season'},{n:'ごま油',q:0.5,u:'小さじ',c:'season'},
+   {n:'長ねぎ',q:0.1,u:'本',c:'veg'},{n:'砂糖',q:0.5,u:'小さじ',c:'season'}]},
+ {name:'いんげんの白和え', genre:'副菜・小鉢', items:[
+   {n:'いんげん',q:40,u:'g',c:'veg'},{n:'豆腐',q:40,u:'g',c:'dairy'},
+   {n:'白すりごま',q:0.5,u:'大さじ',c:'season'},{n:'砂糖',q:0.5,u:'小さじ',c:'season'},
+   {n:'しょうゆ',q:0.5,u:'小さじ',c:'season'}]},
+ {name:'かぶのマリネ', genre:'副菜・小鉢', items:[
+   {n:'かぶ',q:0.5,u:'個',c:'veg'},{n:'酢',q:0.5,u:'大さじ',c:'season'},
+   {n:'オリーブオイル',q:1,u:'小さじ',c:'season'},{n:'砂糖',q:0.5,u:'小さじ',c:'season'},
+   {n:'塩',q:0,u:'適量',c:'season'}]},
+
+ /* ---- 6月のお昼メニュー対応で追加（汁物・スープ） ---- */
+ {name:'豆腐の味噌汁', genre:'汁物・スープ', items:[
+   {n:'豆腐',q:60,u:'g',c:'dairy'},{n:'長ねぎ',q:0.1,u:'本',c:'veg'},
+   {n:'味噌',q:1,u:'大さじ',c:'season'},{n:'だし汁',q:150,u:'ml',c:'season'}]},
+ {name:'長ねぎのすまし汁', genre:'汁物・スープ', items:[
+   {n:'長ねぎ',q:0.2,u:'本',c:'veg'},{n:'麩',q:1,u:'個',c:'other'},
+   {n:'だし汁',q:150,u:'ml',c:'season'},{n:'しょうゆ',q:0.5,u:'小さじ',c:'season'},
+   {n:'塩',q:0,u:'適量',c:'season'}]},
+ {name:'なめこ汁', genre:'汁物・スープ', items:[
+   {n:'なめこ',q:0.25,u:'袋',c:'veg'},{n:'豆腐',q:40,u:'g',c:'dairy'},
+   {n:'長ねぎ',q:0.1,u:'本',c:'veg'},{n:'味噌',q:1,u:'大さじ',c:'season'},
+   {n:'だし汁',q:150,u:'ml',c:'season'}]},
+ {name:'玉ねぎと豆腐の味噌汁', genre:'汁物・スープ', items:[
+   {n:'玉ねぎ',q:0.15,u:'個',c:'veg'},{n:'豆腐',q:40,u:'g',c:'dairy'},
+   {n:'味噌',q:1,u:'大さじ',c:'season'},{n:'だし汁',q:150,u:'ml',c:'season'}]},
+ {name:'キャベツの味噌汁', genre:'汁物・スープ', items:[
+   {n:'キャベツ',q:40,u:'g',c:'veg'},{n:'油揚げ',q:0.1,u:'枚',c:'dairy'},
+   {n:'味噌',q:1,u:'大さじ',c:'season'},{n:'だし汁',q:150,u:'ml',c:'season'}]},
+ {name:'玉ねぎスープ', genre:'汁物・スープ', items:[
+   {n:'玉ねぎ',q:0.25,u:'個',c:'veg'},{n:'コンソメ',q:0.5,u:'個',c:'season'},
+   {n:'パセリ',q:0,u:'適量',c:'veg'}]},
+ {name:'長ねぎの味噌汁', genre:'汁物・スープ', items:[
+   {n:'長ねぎ',q:0.2,u:'本',c:'veg'},{n:'油揚げ',q:0.25,u:'枚',c:'dairy'},
+   {n:'味噌',q:1,u:'大さじ',c:'season'},{n:'だし汁',q:150,u:'ml',c:'season'}]},
+ {name:'けんちん汁風すまし', genre:'汁物・スープ', items:[
+   {n:'大根',q:30,u:'g',c:'veg'},{n:'にんじん',q:0.1,u:'本',c:'veg'},
+   {n:'ごぼう',q:0.1,u:'本',c:'veg'},{n:'豆腐',q:40,u:'g',c:'dairy'},
+   {n:'長ねぎ',q:0.1,u:'本',c:'veg'},{n:'だし汁',q:180,u:'ml',c:'season'},
+   {n:'しょうゆ',q:1,u:'小さじ',c:'season'},{n:'ごま油',q:0.5,u:'小さじ',c:'season'}]},
+ {name:'かき玉スープ', genre:'汁物・スープ', items:[
+   {n:'卵',q:0.5,u:'個',c:'dairy'},{n:'鶏がらスープの素',q:1,u:'小さじ',c:'season'},
+   {n:'片栗粉',q:0.5,u:'小さじ',c:'staple'},{n:'長ねぎ',q:0.05,u:'本',c:'veg'}]},
+ {name:'卵と青菜のスープ', genre:'汁物・スープ', items:[
+   {n:'卵',q:0.5,u:'個',c:'dairy'},{n:'小松菜',q:20,u:'g',c:'veg'},
+   {n:'鶏がらスープの素',q:1,u:'小さじ',c:'season'},{n:'ごま油',q:0.25,u:'小さじ',c:'season'}]},
+ {name:'かぼちゃスープ', genre:'汁物・スープ', items:[
+   {n:'かぼちゃ',q:60,u:'g',c:'veg'},{n:'玉ねぎ',q:0.1,u:'個',c:'veg'},
+   {n:'牛乳',q:80,u:'ml',c:'dairy'},{n:'コンソメ',q:0.25,u:'個',c:'season'},
+   {n:'バター',q:5,u:'g',c:'dairy'}]},
+];
+
+/* ============================================================
+   献立プリセット：月別お昼メニュー
+   days = [月,火,水,木,金] の料理名リスト
+============================================================ */
+const PRESETS = [
+ {label:'5月 第1週（1日）', days:[
+   [], [], [], [],
+   ['焼きうどん','ちくわ磯辺焼き','キャベツ和え','卵焼き']]},
+ {label:'5月 第2週（4〜8日）', days:[
+   ['麻婆豆腐','春雨サラダ','ナムル','チヂミ','中華スープ'],
+   ['コロッケ','キャベツ千切り','マカロニサラダ','コーン','味噌汁（豆腐とわかめ）'],
+   ['チキンカレー','グリーンサラダ','福神漬','ヨーグルト'],
+   ['鶏の唐揚げ','紫キャベツマリネ','ポテト','味噌汁（豆腐とわかめ）'],
+   ['ざるそば','天ぷら','卵焼き','小松菜和え']]},
+ {label:'5月 第3週（11〜15日）', days:[
+   ['豚肉の塩だれ炒め','キャベツ塩昆布','冷やしナス','卵サラダ','味噌汁（豆腐とわかめ）'],
+   ['ガパオライス','目玉焼き','グリーンサラダ','春雨サラダ'],
+   ['豚しゃぶ','キムチ','春菊ごま和え','味噌汁（豆腐とわかめ）'],
+   ['中華あんかけご飯','春巻き','ナムル','中華スープ'],
+   ['鶏のトマト煮','グリーンサラダ','冷奴','オムレツ','コンソメスープ']]},
+ {label:'5月 第4週（18〜22日）', days:[
+   ['鶏の甘辛煮','キャベツ和え','ポテトサラダ','揚げ出し豆腐','味噌汁（豆腐とわかめ）'],
+   ['親子丼','小松菜お浸し','白和え','ひじき煮'],
+   ['豚の生姜焼き','ナムル','マカロニサラダ','コーン','味噌汁（豆腐とわかめ）'],
+   ['ビビンバ','ナムル','コンソメスープ','キムチ'],
+   ['冷やし中華','春巻き','中華サラダ','味玉']]},
+ {label:'5月 第5週（25〜29日）', days:[
+   ['エビチリ','春雨サラダ','ナムル','中華スープ'],
+   ['ぶり照り焼き','大根おろし','小松菜和え','冷奴','味噌汁（豆腐とわかめ）'],
+   ['鮭のホイル焼き','ブロッコリー','人参ラペ','ポテト','味噌汁（豆腐とわかめ）'],
+   ['焼肉定食','キムチ','ナムル','わかめスープ'],
+   ['鯖の塩焼き','大根おろし','小松菜和え','冷奴','味噌汁（豆腐とわかめ）']]},
+ {label:'6月 第1週（1〜5日）', days:[
+   ['さばの味噌煮','里芋の白煮','小松菜の白和え','かぶの浅漬け','豆腐の味噌汁'],
+   ['鶏の照り焼き','春菊のお浸し','さつまいもレモン煮','れんこん金平','長ねぎのすまし汁'],
+   ['鮭の塩麹焼き','大根の煮物','キャベツのごま和え','ひじき煮','なめこ汁'],
+   ['豚の生姜焼き','白菜の浅漬け','かぼちゃサラダ','もやしナムル','玉ねぎと豆腐の味噌汁'],
+   ['鶏団子と野菜の甘酢あん','ブロッコリーおかか和え','じゃがいもの煮物','小松菜お浸し','わかめスープ']]},
+ {label:'6月 第2週（8〜12日）', days:[
+   ['鮭のホイル焼き','れんこんの炒め煮','卯の花','春菊の白和え','キャベツの味噌汁'],
+   ['鶏の唐揚げ','キャベツサラダ','じゃがいもの煮物','春菊のごま和え','玉ねぎスープ'],
+   ['豚肉とれんこんの炒め煮','白菜のお浸し','さつまいもレモン煮','小松菜のごま和え','長ねぎの味噌汁'],
+   ['鶏のカシューナッツ炒め','もやしナムル','かぼちゃ煮','かぶの浅漬け','中華スープ'],
+   ['豚汁定食','かぶの浅漬け','さつまいもの甘煮','小松菜の白和え']]},
+ {label:'6月 第3週（15〜19日）', days:[
+   ['肉じゃが','白菜のごま和え','卯の花','きゅうりの浅漬け','豆腐の味噌汁'],
+   ['野菜のかき揚げ','ほうれん草のお浸し','れんこんの甘辛煮','かぼちゃサラダ','なめこ汁'],
+   ['牛丼','春菊の白和え','じゃがいもの煮物','れんこんの酢の物'],
+   ['豚肉となすの味噌炒め','キャベツのナムル','れんこんの梅和え','かぼちゃと豆のサラダ','けんちん汁風すまし'],
+   ['とり天（おろしポン酢）','切干大根とツナのサラダ','ほうれん草の白和え','かぶ葉の炒め物','わかめスープ']]},
+ {label:'6月 第4週（22〜26日）', days:[
+   ['鶏のゆず胡椒焼き','大根ステーキ','もやしの梅おかか','にんじんシリシリ','なめこ汁'],
+   ['牛肉と春雨の炒め煮','小松菜のクリーム和え','かぶのそぼろ炒め','れんこんの柚子風味','かき玉スープ'],
+   ['ハンバーグ','ポテトサラダ','かぼちゃスープ','小松菜ソテー','コンソメスープ'],
+   ['和風カレーうどん','小松菜の白だし和え','大根フライ','卵焼き','わかめスープ'],
+   ['牛肉と野菜の味噌炒め','にんじんの塩麹和え','かぶの甘酢漬け','じゃがいもガレット','豆腐の味噌汁']]},
+ {label:'6月 第5週（29・30日）', days:[
+   ['豚の生姜焼き','白菜の中華炒め','れんこんと枝豆のサラダ','長芋ののり塩和え'],
+   ['白身魚のチリソース','温豆腐のごま香味だれ','いんげんの白和え','かぶのマリネ','卵と青菜のスープ'],
+   [], [], []]},
+];
+
+/* ============================================================
+   作り方（手順）データ — レシピ名で参照
+============================================================ */
+const STEPS = {
+ 'カレーライス':['肉と野菜を一口大に切る','鍋に油を熱し、肉→玉ねぎ→にんじん→じゃがいもの順に炒める','水（1人分約200ml）を加えて約15分煮る','火を止めてルーを溶かし、とろみがつくまで弱火で煮て、ごはんにかける'],
+ '肉じゃが':['じゃがいも・玉ねぎ・にんじんを一口大に切る','鍋で牛肉を炒め、野菜としらたきを加えてさっと炒める','だし汁と調味料を加え、落とし蓋をして15分ほど煮含める'],
+ '豚の生姜焼き':['玉ねぎは薄切り、しょうがはすりおろす','調味料としょうがを合わせてたれを作る','豚肉と玉ねぎを焼き、たれを絡める。千切りキャベツを添える'],
+ 'ハンバーグ':['玉ねぎをみじん切りにして炒め、冷ます','ひき肉・パン粉・牛乳・卵・玉ねぎをよく練り、小判形にまとめる','フライパンで両面を焼き、蓋をして弱火で中まで火を通す','ケチャップとソースを煮詰めてかける'],
+ '鶏の唐揚げ':['鶏肉を一口大に切り、しょうゆ・酒・おろししょうが・にんにくに15分漬ける','片栗粉をまぶす','170℃の油で4〜5分こんがり揚げる'],
+ '鶏の照り焼き':['鶏肉は厚みを開いて均一にする','皮目から焼き、両面に焼き色をつける','調味料を加え、煮絡めて照りを出す'],
+ '味噌汁（豆腐とわかめ）':['だし汁を温め、さいの目に切った豆腐とわかめを入れる','ひと煮立ちしたら火を弱め、味噌を溶き入れる','小口切りの長ねぎを加えて火を止める'],
+ '豚汁':['野菜とこんにゃくを食べやすく切る','鍋で豚肉を炒め、野菜を加えて炒め合わせる','だし汁を加えて野菜が柔らかくなるまで煮て、味噌を溶き入れ、長ねぎを加える'],
+ '親子丼':['玉ねぎを薄切り、鶏肉を一口大に切る','小鍋にめんつゆ（＋水）と玉ねぎ・鶏肉を入れて煮る','溶き卵を回し入れ、半熟で火を止めてごはんにのせる'],
+ '牛丼':['玉ねぎを薄切りにする','だし汁と調味料を煮立て、玉ねぎと牛肉を入れる','アクを取りながら10分ほど煮て、ごはんにのせる'],
+ '麻婆豆腐':['豆腐をさいの目に切る。ねぎ・にんにく・しょうがはみじん切り','ひき肉と香味野菜を炒め、豆板醤と味噌を加える','水と調味料、豆腐を加えて煮て、水溶き片栗粉でとろみをつける'],
+ '野菜炒め':['野菜を食べやすく切る','強火で豚肉を炒め、にんじん→キャベツ→もやし・ピーマンの順に加える','しょうゆと塩こしょうで調味する'],
+ '餃子':['キャベツとにらをみじん切りにし、ひき肉・調味料とよく練る','皮で包む','フライパンに並べて焼き、水を注いで蓋をし、蒸し焼きにする'],
+ 'チャーハン':['ねぎとハムを刻む','油で溶き卵→ごはんの順に炒めてほぐす','具と調味料を加えて炒め合わせる'],
+ '鮭の塩焼き':['鮭に塩をふって10分おき、水気を拭く','グリルで両面を7〜8分焼く','大根おろしを添える'],
+ 'さばの味噌煮':['さばの皮に切り込みを入れ、熱湯をかけて臭みを取る','調味料と水、しょうがを煮立てた中にさばを入れる','落とし蓋をして10分ほど、煮汁にとろみが出るまで煮る'],
+ 'オムライス':['鶏肉と玉ねぎを刻んで炒め、ごはんとケチャップを加えてチキンライスを作る','バターで溶き卵を半熟に焼く','卵でチキンライスを包み、ケチャップをかける'],
+ 'スパゲッティミートソース':['玉ねぎ・にんじん・にんにくをみじん切りにして炒める','ひき肉を加えて炒め、トマト缶と調味料を加えて10分煮る','ゆでたスパゲッティにかける'],
+ 'カルボナーラ':['ベーコンを炒める','卵・粉チーズ・牛乳を混ぜておく','ゆでたてのパスタとベーコンを卵液に絡め、余熱でとろみをつけて黒こしょうをふる'],
+ 'クリームシチュー':['肉と野菜を一口大に切る','油で炒め、水を加えて15分煮る','火を止めてルーを溶かし、牛乳とゆでたブロッコリーを加えて温める'],
+ '焼きうどん':['豚肉と野菜を切る','豚肉→野菜の順に炒め、うどんを加える','ソースで調味し、かつお節をかける'],
+ 'ポテトサラダ':['じゃがいもをゆでてつぶす','きゅうり・ハムは薄切り、にんじんは薄切りにしてゆでる','粗熱が取れたらマヨネーズで和え、塩こしょうで調える'],
+ 'グリーンサラダ':['レタスをちぎり、きゅうりとトマトを切る','器に盛り、ドレッシングをかける'],
+ 'だし巻き卵':['卵を溶き、だし汁と調味料を混ぜる','卵焼き器に油を熱し、卵液を数回に分けて流し入れる','巻きながら焼く'],
+ 'コロッケ':['じゃがいもをゆでてつぶす。玉ねぎとひき肉は炒める','合わせて俵形にし、小麦粉→溶き卵→パン粉の順に衣をつける','170℃の油できつね色に揚げる'],
+ 'チキンカレー':['鶏肉と野菜を一口大に切る','油で炒め、水を加えて15分煮る','火を止めてルーを溶かし、とろみがつくまで煮て、ごはんにかける'],
+ '鶏のトマト煮':['鶏肉を一口大に切り、にんにくと玉ねぎを刻む','オリーブオイルで鶏肉に焼き色をつけ、玉ねぎを炒める','トマト缶とコンソメを加えて15分煮込む'],
+ 'ざるそば':['そばを表示時間ゆで、冷水でしめる','ざるに盛り、刻みのりをかける','ねぎとわさびを添え、めんつゆでいただく'],
+ '天ぷら':['えびと野菜の下ごしらえをする','小麦粉・卵・冷水でさっくり衣を作る','170℃の油でからりと揚げ、天つゆ（めんつゆ）を添える'],
+ '豚しゃぶ':['湯を沸かして火を弱め、豚肉を1枚ずつさっとゆでて冷ます','レタスときゅうりを切って器に敷く','豚肉をのせ、ポン酢とごまをかける'],
+ '鶏の甘辛煮':['鶏肉を一口大に切る','フライパンで皮目から焼く','調味料としょうがを加え、煮絡める'],
+ 'ぶり照り焼き':['ぶりの水気を拭き、油で両面を焼く','余分な脂を拭き取る','調味料を加えて煮絡め、照りを出す'],
+ '鯖の塩焼き':['さばに塩をふって10分おき、水気を拭く','グリルで両面を焼く','大根おろしを添える'],
+ '鮭のホイル焼き':['アルミホイルに薄切り玉ねぎを敷き、鮭としめじをのせる','酒をふり、バターをのせて包む','フライパンかトースターで10〜15分蒸し焼きにし、塩こしょうで調える'],
+ '焼肉定食':['玉ねぎとピーマンを切る','牛肉と野菜を強火で焼く','焼肉のたれを絡め、ごはんと共に盛る'],
+ '豚肉の塩だれ炒め':['長ねぎは斜め切り、にんにくはみじん切りにする','豚肉を炒め、ねぎとにんにくを加える','鶏がら・塩・レモン汁・ごま油で調味する'],
+ 'ガパオライス':['野菜を粗みじんに切る','にんにくとひき肉を炒め、野菜と調味料を加える','バジルを混ぜてごはんにのせ、目玉焼きをのせる'],
+ '中華あんかけご飯':['豚肉と野菜を食べやすく切る','炒めて水と調味料を加え、ひと煮立ちさせる','水溶き片栗粉でとろみをつけ、ごはんにかける'],
+ 'エビチリ':['えびの背わたを取り、片栗粉をまぶす','香味野菜を炒め、えびを加えて炒める','ケチャップ・豆板醤などの合わせ調味料を絡める'],
+ '冷やし中華':['麺をゆでて冷水でしめる','ハム・きゅうり・薄焼き卵を細切りに、トマトはくし切りにする','麺に具をのせ、たれをかける'],
+ 'ビビンバ':['もやし・ほうれん草・にんじんをゆでてナムルにする','ひき肉を甘辛く炒める','ごはんに具をのせ、卵とコチュジャンを添える'],
+ 'ちくわ磯辺焼き':['ちくわを斜め切りにする','小麦粉・水・青のりの衣を絡める','油で焼き色がつくまで焼く'],
+ 'キャベツ和え':['キャベツをざく切りにしてさっとゆでる（レンジ加熱でも可）','水気を絞り、ごま油・塩・ごまで和える'],
+ '卵焼き':['卵を溶いて調味料を混ぜる','卵焼き器で数回に分けて流し、巻きながら焼く'],
+ '春雨サラダ':['春雨をゆでて戻し、水気を切る','きゅうりとハムを細切りにする','調味料と和えてなじませる'],
+ 'ナムル':['もやし・ほうれん草・にんじんをゆでる','水気をよく絞る','ごま油・鶏がらスープの素・ごまで和える'],
+ 'チヂミ':['粉・卵・水を混ぜ、刻んだにらを加えて生地を作る','ごま油で両面をカリッと焼く','食べやすく切る'],
+ 'キャベツ千切り':['キャベツを千切りにし、冷水にさらしてシャキッとさせ、水気を切る'],
+ 'マカロニサラダ':['マカロニを表示時間ゆでる','きゅうりとハムを切る','マヨネーズで和え、塩こしょうで調える'],
+ 'コーン':['コーンの水気を切って盛り付ける（温める場合はバター少々で炒める）'],
+ '福神漬':['食べる分だけ小皿に盛り付ける'],
+ '紫キャベツマリネ':['紫キャベツを千切りにして塩もみする','水気を絞り、酢・砂糖・オイルで和えてなじませる'],
+ 'ポテト':['じゃがいもをくし形に切り、水にさらして水気を拭く','170℃の油で竹串が通るまで揚げ、塩をふる'],
+ '小松菜和え':['小松菜をゆでて水にとり、絞って食べやすく切る','しょうゆとかつお節で和える'],
+ '小松菜お浸し':['小松菜をゆでて水にとり、絞って切る','だし割りしょうゆをかけ、かつお節をのせる'],
+ 'キャベツ塩昆布':['キャベツをざく切りにする','塩昆布とごま油で和えてなじませる'],
+ '冷やしナス':['なすを加熱して（レンジ3分など）手で裂く','冷やして、めんつゆとおろししょうがをかける'],
+ '卵サラダ':['卵をゆでて刻む','薄切りきゅうりと合わせ、マヨネーズで和える'],
+ '目玉焼き':['フライパンに油を熱し、卵を割り入れる','好みの固さに焼く'],
+ 'キムチ':['食べる分だけ小皿に盛り付ける'],
+ '春菊ごま和え':['春菊をゆでて水にとり、絞って切る','すりごま・しょうゆ・砂糖で和える'],
+ '春巻き':['具材を炒めて調味し、冷ます','皮で包み、巻き終わりを水溶き粉で留める','170℃の油でこんがり揚げる'],
+ '冷奴':['豆腐を切って器に盛る','かつお節をのせ、しょうゆをかける'],
+ 'オムレツ':['卵・牛乳・塩こしょうを混ぜる','バターを熱して流し入れ、半熟のうちに形を整える'],
+ '揚げ出し豆腐':['豆腐の水気を切り、片栗粉をまぶす','油で表面がカリッとするまで揚げ焼きにする','温めためんつゆをかけ、大根おろしを添える'],
+ '白和え':['ほうれん草とにんじんをゆでて切る','水切りした豆腐をつぶし、ごまと調味料を混ぜて和え衣を作る','野菜を和える'],
+ 'ひじき煮':['ひじきを水で戻す','にんじん・油揚げと共に油で炒める','だし汁と調味料で汁気がなくなるまで煮る'],
+ '中華サラダ':['もやしをゆで、きゅうり・トマトを切る','調味料を混ぜてたれを作り、和える'],
+ '味玉':['卵を7分ゆでて殻をむく','しょうゆとみりんの漬け汁に半日漬ける'],
+ '大根おろし':['大根をすりおろし、軽く水気を切って盛る'],
+ 'ブロッコリー':['ブロッコリーを小房に分けて塩ゆでする','水気を切り、マヨネーズを添える'],
+ '人参ラペ':['にんじんを千切りにして塩もみする','酢・オイル・砂糖で和えてなじませる'],
+ '中華スープ':['湯を沸かし、鶏がらスープの素で味をつける','溶き卵を回し入れ、ねぎとごま油を加える'],
+ 'コンソメスープ':['玉ねぎとベーコンを切り、水と共に煮る','コンソメで調味し、パセリをふる'],
+ 'わかめスープ':['湯を沸かし、鶏がらスープの素とわかめを入れる','ねぎを加え、ごま油とごまをたらす'],
+ 'ヨーグルト':['器に盛り付ける'],
+ '鮭の塩麹焼き':['鮭に塩麹を塗って30分〜一晩おく','塩麹を軽くぬぐい、焦げやすいので弱めの火で両面を焼く'],
+ '鶏団子と野菜の甘酢あん':['ひき肉に片栗粉（半量）を混ぜて団子にし、ゆでるか焼く','野菜を炒める','甘酢の調味料を煮立て、団子と野菜を絡め、残りの片栗粉（水溶き）でとろみをつける'],
+ '豚肉とれんこんの炒め煮':['れんこんは薄めの半月切り、にんじんは短冊に切る','豚肉を炒め、野菜を加えて炒める','調味料と少量の水を加え、汁気が少なくなるまで炒め煮にする'],
+ '鶏のカシューナッツ炒め':['鶏肉を角切りにし、片栗粉をまぶす','鶏肉を炒め、野菜を加えて炒める','調味料とカシューナッツを加えて手早く絡める'],
+ '豚汁定食':['野菜とこんにゃくを切り、豚肉と炒める','だし汁で柔らかくなるまで煮て、味噌を溶き入れる','ごはんと共に盛り付ける'],
+ '野菜のかき揚げ':['野菜を細切りにし、小麦粉（分量内少々）をまぶす','残りの粉と卵・冷水で衣を作り、野菜を絡める','形を整えながら170℃の油に入れ、からりと揚げる'],
+ '豚肉となすの味噌炒め':['なすは乱切りにして水にさらす','豚肉→なす→ピーマンの順に炒める','合わせ味噌だれを絡める'],
+ 'とり天（おろしポン酢）':['鶏むね肉をそぎ切りにする','小麦粉・片栗粉・卵の衣をつけ、170℃の油で揚げる','大根おろしとポン酢でいただく'],
+ '鶏のゆず胡椒焼き':['鶏肉にゆず胡椒・酒・しょうゆを揉み込んで15分おく','フライパンで皮目から両面をこんがり焼く'],
+ '牛肉と春雨の炒め煮':['春雨を戻し、野菜を切る','牛肉を炒め、野菜を加える','春雨と調味料、少量の水を加え、汁気を吸わせながら炒め煮にする'],
+ '和風カレーうどん':['豚肉と玉ねぎを煮る','めんつゆ（＋水）で味をつけ、ルーを溶かす','水溶き片栗粉でとろみをつけ、ゆでたうどんにかけてねぎを散らす'],
+ '牛肉と野菜の味噌炒め':['野菜を食べやすく切る','牛肉を炒め、野菜を加えて炒める','合わせ味噌だれを絡める'],
+ '白身魚のチリソース':['魚を一口大に切り、片栗粉をまぶして揚げ焼きにする','香味野菜を炒め、チリソースの調味料を加える','魚を戻し入れて絡める'],
+ '里芋の白煮':['里芋の皮をむき、塩もみしてぬめりを洗う','だし汁と調味料で柔らかくなるまで15分ほど煮含める'],
+ '小松菜の白和え':['小松菜をゆでて絞り、切る','水切りした豆腐をつぶし、ごまと調味料を混ぜて和える'],
+ 'かぶの浅漬け':['かぶを薄切りにする（葉があれば刻んで一緒に）','塩と塩昆布で揉み、30分ほどおく'],
+ '春菊のお浸し':['春菊をゆでて水にとり、絞って切る','だし割りしょうゆをかけ、かつお節をのせる'],
+ 'さつまいもレモン煮':['さつまいもを輪切りにして水にさらす','ひたひたの水と砂糖で柔らかく煮て、仕上げにレモン汁を加える'],
+ 'れんこん金平':['れんこんを薄切りにして水にさらす','ごま油でにんじんと炒める','調味料を絡め、ごまをふる'],
+ '大根の煮物':['大根を厚めのいちょう切りにする','だし汁と調味料で、竹串が通るまで20分ほど煮含める'],
+ 'キャベツのごま和え':['キャベツをゆでて（レンジ加熱でも可）絞る','すりごま・しょうゆ・砂糖で和える'],
+ '白菜の浅漬け':['白菜をざく切りにする','塩と塩昆布で揉み、30分ほどおく'],
+ 'かぼちゃサラダ':['かぼちゃを加熱して粗くつぶす','粗熱を取り、マヨネーズと塩こしょうで和える'],
+ 'もやしナムル':['もやしをさっとゆでて水気をよく絞る','ごま油・鶏がらスープの素・ごまで和える'],
+ 'ブロッコリーおかか和え':['ブロッコリーを小房に分けて塩ゆでする','しょうゆとかつお節で和える'],
+ 'じゃがいもの煮物':['じゃがいもを一口大に切る','だし汁と調味料で柔らかくなるまで煮含める'],
+ 'れんこんの炒め煮':['れんこんを薄切りにして水にさらす','油でにんじんと炒め、調味料と少量の水で炒め煮にする'],
+ '卯の花':['にんじん・ねぎ・油揚げを刻んで油で炒める','おからを加えて炒め、だし汁と調味料を加える','汁気を飛ばしながらしっとりするまで炒り煮にする'],
+ '春菊の白和え':['春菊をゆでて絞り、切る','水切りした豆腐をつぶし、ごまと調味料を混ぜて和える'],
+ 'キャベツサラダ':['キャベツは千切り、きゅうりは薄切りにする','コーンと合わせ、ドレッシングをかける'],
+ '春菊のごま和え':['春菊をゆでて絞り、切る','すりごま・しょうゆ・砂糖で和える'],
+ '白菜のお浸し':['白菜をゆでて絞り、食べやすく切る','しょうゆをかけ、かつお節をのせる'],
+ '小松菜のごま和え':['小松菜をゆでて絞り、切る','すりごま・しょうゆ・砂糖で和える'],
+ 'かぼちゃ煮':['かぼちゃを一口大に切る','だし汁と調味料で、柔らかくなるまで10分ほど煮含める'],
+ 'さつまいもの甘煮':['さつまいもを輪切りにして水にさらす','ひたひたの水と砂糖・みりんで柔らかく煮る'],
+ '白菜のごま和え':['白菜をゆでて絞り、切る','すりごま・しょうゆ・砂糖で和える'],
+ 'きゅうりの浅漬け':['きゅうりを薄切りにする','塩と塩昆布で揉み、15分ほどおく'],
+ 'ほうれん草のお浸し':['ほうれん草をゆでて水にとり、絞って切る','しょうゆをかけ、かつお節をのせる'],
+ 'れんこんの甘辛煮':['れんこんを薄切りにして水にさらす','ごま油で炒め、調味料を加えて照りが出るまで煮絡める'],
+ 'れんこんの酢の物':['れんこんを薄切りにしてさっとゆでる','甘酢（酢・砂糖・塩）に漬けてなじませる'],
+ 'キャベツのナムル':['キャベツをゆでて絞る','ごま油・鶏がらスープの素・ごまで和える'],
+ 'れんこんの梅和え':['れんこんを薄切りにしてさっとゆでる','たたいた梅とみりん・かつお節で和える'],
+ 'かぼちゃと豆のサラダ':['かぼちゃを加熱して粗くつぶす','ミックスビーンズと合わせ、マヨネーズで和える'],
+ '切干大根とツナのサラダ':['切干大根を水で戻し、絞って切る','きゅうりの細切り・ツナと合わせ、マヨネーズとしょうゆで和える'],
+ 'ほうれん草の白和え':['ほうれん草をゆでて絞り、切る','水切りした豆腐をつぶし、ごまと調味料を混ぜて和える'],
+ 'かぶ葉の炒め物':['かぶの葉を細かく刻む','ごま油でじゃこと炒め、しょうゆで調味してごまをふる'],
+ '大根ステーキ':['大根を2cm厚の輪切りにし、下ゆでする（レンジ加熱でも可）','バターで両面に焼き色をつける','しょうゆとみりんを絡める'],
+ 'もやしの梅おかか':['もやしをゆでて水気を絞る','たたいた梅・かつお節・しょうゆで和える'],
+ 'にんじんシリシリ':['にんじんを千切りにする','油で炒め、ツナを加える','溶き卵を回し入れて炒め、しょうゆで調味する'],
+ '小松菜のクリーム和え':['小松菜をゆでて切る','バターと小麦粉を炒め、牛乳でのばしてクリームソースを作る','小松菜を和えて塩こしょうで調える'],
+ 'かぶのそぼろ炒め':['かぶをくし切りにする','ひき肉を炒め、かぶを加える','調味料を加え、水溶き片栗粉でとろみをつける'],
+ 'れんこんの柚子風味':['れんこんを薄切りにしてさっとゆでる','ゆず果汁・酢・砂糖で和えてなじませる'],
+ '小松菜ソテー':['小松菜を食べやすく切る','バターでベーコンと炒め、塩こしょうで調える'],
+ '小松菜の白だし和え':['小松菜をゆでて絞り、切る','白だしで和える'],
+ '大根フライ':['大根を1.5cm厚に切り、柔らかく下ゆでする','小麦粉→溶き卵→パン粉の順に衣をつける','170℃の油できつね色に揚げる'],
+ 'にんじんの塩麹和え':['にんじんを千切りにし、さっとゆでる（レンジ加熱でも可）','塩麹とごま油で和えてなじませる'],
+ 'かぶの甘酢漬け':['かぶを薄切りにして塩もみする','水気を絞り、甘酢に漬けてなじませる'],
+ 'じゃがいもガレット':['じゃがいもを細切りにする（水にさらさない）','片栗粉と粉チーズを混ぜる','フライパンに薄く広げ、両面をカリッと焼く'],
+ '白菜の中華炒め':['白菜をざく切りにする','ごま油で炒め、調味料を加える','水溶き片栗粉で軽くとろみをつける'],
+ 'れんこんと枝豆のサラダ':['れんこんを薄切りにしてゆで、冷ます','枝豆と合わせ、マヨネーズで和える'],
+ '長芋ののり塩和え':['長芋を短冊に切る','青のり・塩・ごま油で和える'],
+ '温豆腐のごま香味だれ':['豆腐をレンジなどで温める','ごま・しょうゆ・ごま油・刻みねぎでたれを作る','豆腐にかける'],
+ 'いんげんの白和え':['いんげんをゆでて斜め切りにする','水切りした豆腐をつぶし、ごまと調味料を混ぜて和える'],
+ 'かぶのマリネ':['かぶを薄切りにして塩もみする','酢・オイル・砂糖で和えてなじませる'],
+ '豆腐の味噌汁':['だし汁を温め、さいの目の豆腐を入れる','味噌を溶き入れ、ねぎを加える'],
+ '長ねぎのすまし汁':['だし汁を温め、斜め切りのねぎと麩を入れる','しょうゆと塩で味を調える'],
+ 'なめこ汁':['だし汁を温め、さっと洗ったなめこと豆腐を入れる','味噌を溶き入れ、ねぎを加える'],
+ '玉ねぎと豆腐の味噌汁':['だし汁で薄切り玉ねぎを煮る','豆腐を加え、味噌を溶き入れる'],
+ 'キャベツの味噌汁':['だし汁でキャベツと油揚げを煮る','味噌を溶き入れる'],
+ '玉ねぎスープ':['薄切り玉ねぎを水から煮る','コンソメで調味し、パセリをふる'],
+ '長ねぎの味噌汁':['だし汁でねぎと油揚げを煮る','味噌を溶き入れる'],
+ 'けんちん汁風すまし':['野菜をいちょう切りにし、ごま油で炒める','だし汁を加えて柔らかくなるまで煮る','豆腐をくずし入れ、しょうゆで調味してねぎを加える'],
+ 'かき玉スープ':['湯を沸かし、鶏がらで味をつけ、水溶き片栗粉でとろみをつける','溶き卵を細く回し入れ、ねぎを散らす'],
+ '卵と青菜のスープ':['湯を沸かし、鶏がらで味をつけ、小松菜を入れる','溶き卵を回し入れ、ごま油をたらす'],
+ 'かぼちゃスープ':['かぼちゃと玉ねぎをバターで炒め、水を加えて柔らかく煮る','つぶして（ミキサーにかけて）牛乳とコンソメを加え、温める'],
+};
+
+/* ============================================================
+   状態（localStorage 永続化）
+============================================================ */
+const LS_RECIPES = 'mealapp_custom_recipes';
+const LS_WEEK    = 'mealapp_week_menu';
+const DAYS = ['月','火','水','木','金','土','日'];
+
+let customRecipes = load(LS_RECIPES, []);
+if (!Array.isArray(customRecipes)) customRecipes = [];
+
+// 保存データが壊れていても必ず正しい形に直す
+let week = load(LS_WEEK, null);
+if (!week || !Array.isArray(week.days) || week.days.length !== 7){
+  week = { servings:2, days: DAYS.map(d => ({day:d, meals:[]})) };
+} else {
+  if (typeof week.servings !== 'number' || week.servings < 1) week.servings = 2;
+  week.days.forEach((d, i) => {
+    if (!d || typeof d !== 'object') week.days[i] = d = {day: DAYS[i], meals: []};
+    if (!d.day) d.day = DAYS[i];
+    if (!Array.isArray(d.meals)) d.meals = [];
+  });
+}
+let lastShoppingText = '';
+
+// localStorage が使えない環境（埋め込みビューア等）でも全機能が動くよう、
+// 読み書きとも例外安全にする。保存不可の場合は画面内のみで動作する。
+function load(k, fb){
+  try{
+    const v = JSON.parse(localStorage.getItem(k));
+    return (v === null || v === undefined) ? fb : v;
+  }catch(e){ return fb; }
+}
+function save(k, v){
+  try{ localStorage.setItem(k, JSON.stringify(v)); }
+  catch(e){ /* 保存できない環境では何もしない（動作は継続） */ }
+}
+function allRecipes(){ return [...BUILTIN, ...customRecipes]; }
+function findRecipe(name){ return allRecipes().find(r => r.name === name); }
+
+/* ============================================================
+   共通ユーティリティ
+============================================================ */
+function fmtQty(q){
+  const r = Math.round(q * 100) / 100;
+  if (Number.isInteger(r)) return String(r);
+  return String(Math.round(r * 10) / 10);
+}
+function fmtAmount(q, u){
+  if (u === '適量') return '適量';
+  if (u === '大さじ' || u === '小さじ') return u + fmtQty(q);
+  return fmtQty(q) + u;
+}
+function fmtShopAmount(v){
+  // 小さじ3以上は大さじ換算で表示
+  if (v.u === '小さじ' && v.q >= 3){
+    const tbsp = Math.floor(v.q / 3);
+    const rem = Math.round((v.q - tbsp * 3) * 10) / 10;
+    return rem > 0 ? `大さじ${tbsp}＋小さじ${fmtQty(rem)}` : `大さじ${tbsp}`;
+  }
+  return fmtAmount(v.q, v.u);
+}
+function ceilHint(q, u){
+  if (u === '適量' || !COUNTABLE.has(u)) return '';
+  const c = Math.ceil(q - 1e-9);
+  return (c > q + 1e-9) ? `（→${c}${u}）` : '';
+}
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 1800);
+}
+// 予期しないエラーは黙って死なず画面に表示する
+window.onerror = function(msg){
+  try{ toast('エラー: ' + msg); }catch(e){}
+  return false;
+};
+function copyText(text, msg){
+  // clipboard API がない環境（file://等）でも例外を出さない
+  const fallback = () => {
+    try{
+      const ta = document.createElement('textarea');
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); ta.remove(); toast(msg);
+    }catch(e){ toast('この環境ではコピーできません'); }
+  };
+  try{
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(() => toast(msg)).catch(fallback);
+    } else fallback();
+  }catch(e){ fallback(); }
+}
+function askConfirm(msg){
+  // window.confirm はWebView環境で動かないことがあるため自前実装
+  return new Promise(res => {
+    const ov = document.createElement('div');
+    ov.className = 'confirm-ov';
+    ov.innerHTML = `<div class="confirm-box"><p></p>
+      <div class="row" style="justify-content:flex-end">
+        <button class="btn ghost small" data-no>キャンセル</button>
+        <button class="btn small" data-yes>OK</button></div></div>`;
+    ov.querySelector('p').textContent = msg;
+    ov.querySelector('[data-yes]').onclick = () => { ov.remove(); res(true); };
+    ov.querySelector('[data-no]').onclick  = () => { ov.remove(); res(false); };
+    document.body.appendChild(ov);
+  });
+}
+function stepServ(id, d){
+  const el = document.getElementById(id);
+  el.value = Math.max(1, Math.min(20, (parseInt(el.value)||1) + d));
+  el.dispatchEvent(new Event('change'));
+}
+
+/* ============================================================
+   タブ切り替え
+============================================================ */
+document.querySelectorAll('.tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.panel).classList.add('active');
+  });
+});
+
+/* ============================================================
+   タブ1: 料理から計算
+============================================================ */
+function fillRecipeSelect(sel){
+  sel.innerHTML = '';
+  const genres = {};
+  allRecipes().forEach(r => { (genres[r.genre] = genres[r.genre] || []).push(r); });
+  const keys = Object.keys(genres).sort((a,b) => {
+    const ia = GENRE_ORDER.indexOf(a), ib = GENRE_ORDER.indexOf(b);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+  });
+  keys.forEach(g => {
+    const og = document.createElement('optgroup'); og.label = g;
+    genres[g].forEach(r => {
+      const o = document.createElement('option'); o.value = r.name; o.textContent = r.name;
+      og.appendChild(o);
+    });
+    sel.appendChild(og);
+  });
+}
+function buildDishSelect(){
+  const sel = document.getElementById('dishSelect');
+  const cur = sel.value;
+  fillRecipeSelect(sel);
+  if (cur && findRecipe(cur)) sel.value = cur;
+}
+function renderDish(){
+  const name = document.getElementById('dishSelect').value;
+  const serv = Math.max(1, parseInt(document.getElementById('dishServ').value) || 1);
+  const r = findRecipe(name);
+  const tb = document.getElementById('dishTbody');
+  document.getElementById('dishResultTitle').textContent = `${name} の材料（${serv}人分）`;
+  tb.innerHTML = '';
+  if (!r) return;
+  const items = [...r.items].sort((a,b) => CAT_ORDER.indexOf(a.c) - CAT_ORDER.indexOf(b.c));
+  items.forEach(it => {
+    const tr = document.createElement('tr');
+    const cat = CATS[it.c] || CATS.other;
+    tr.innerHTML = `<td><span class="chip ${cat.cls}">${cat.label}</span></td>
+      <td>${it.n}</td>
+      <td class="qty" style="text-align:right">${fmtAmount(it.q * serv, it.u)} <span class="hint">${ceilHint(it.q * serv, it.u)}</span></td>`;
+    tb.appendChild(tr);
+  });
+  // 作り方
+  const steps = getSteps(r);
+  const ol = document.getElementById('dishSteps');
+  ol.innerHTML = '';
+  steps.forEach(s => {
+    const li = document.createElement('li'); li.textContent = s; ol.appendChild(li);
+  });
+  document.getElementById('dishStepsWrap').style.display = steps.length ? '' : 'none';
+}
+function getSteps(r){
+  return (r.steps && r.steps.length) ? r.steps : (STEPS[r.name] || []);
+}
+function copyDishList(){
+  const name = document.getElementById('dishSelect').value;
+  const serv = Math.max(1, parseInt(document.getElementById('dishServ').value) || 1);
+  const r = findRecipe(name);
+  if (!r) return;
+  let text = `【${name}】${serv}人分の材料\n`;
+  r.items.forEach(it => { text += `・${it.n} ${fmtAmount(it.q * serv, it.u)}\n`; });
+  const steps = getSteps(r);
+  if (steps.length){
+    text += '\n＜作り方＞\n';
+    steps.forEach((s, i) => { text += `${i+1}. ${s}\n`; });
+  }
+  copyText(text, '材料と作り方をコピーしました');
+}
+document.getElementById('dishSelect').addEventListener('change', renderDish);
+document.getElementById('dishServ').addEventListener('change', renderDish);
+document.getElementById('dishServ').addEventListener('input', renderDish);
+
+/* ============================================================
+   タブ2: 一週間メニュー
+============================================================ */
+function renderWeek(){
+  document.getElementById('weekServ').value = week.servings;
+  const wrap = document.getElementById('weekDays');
+  wrap.innerHTML = '';
+  week.days.forEach((d, di) => {
+    const card = document.createElement('div');
+    card.className = 'daycard';
+    const head = document.createElement('div');
+    head.className = 'dayhead';
+    head.innerHTML = `<span>${d.day}曜日</span>`;
+    const addBtn = document.createElement('button');
+    addBtn.className = 'btn ghost small';
+    addBtn.textContent = '＋ 料理を追加';
+    addBtn.onclick = () => { d.meals.push({recipe: BUILTIN[0].name, servings: week.servings}); renderWeek(); persistWeek(); };
+    head.appendChild(addBtn);
+    card.appendChild(head);
+
+    if (d.meals.length === 0){
+      const p = document.createElement('p');
+      p.className = 'empty'; p.style.padding = '2px 4px'; p.textContent = '（予定なし）';
+      card.appendChild(p);
+    }
+    d.meals.forEach((m, mi) => {
+      const row = document.createElement('div');
+      row.className = 'mealrow';
+      const sel = document.createElement('select');
+      fillRecipeSelect(sel);
+      sel.value = m.recipe;
+      sel.onchange = () => { m.recipe = sel.value; persistWeek(); };
+      const num = document.createElement('input');
+      num.type = 'number'; num.min = 1; num.max = 20; num.value = m.servings;
+      num.onchange = () => { m.servings = Math.max(1, parseInt(num.value)||1); persistWeek(); };
+      const unit = document.createElement('span');
+      unit.className = 'unitnote'; unit.textContent = '人分';
+      const info = document.createElement('button');
+      info.className = 'btn ghost small'; info.textContent = '📖作り方';
+      info.title = '材料と作り方を見る';
+      info.onclick = () => openDish(sel.value, m.servings);
+      const x = document.createElement('button');
+      x.className = 'x'; x.textContent = '✕'; x.title = '削除';
+      x.onclick = () => { d.meals.splice(mi,1); renderWeek(); persistWeek(); };
+      row.append(sel, num, unit, info, x);
+      card.appendChild(row);
+    });
+    wrap.appendChild(card);
+  });
+}
+function persistWeek(){ save(LS_WEEK, week); }
+function buildPresetSelect(){
+  const sel = document.getElementById('presetSelect');
+  PRESETS.forEach((p, i) => {
+    const o = document.createElement('option'); o.value = i; o.textContent = p.label;
+    sel.appendChild(o);
+  });
+}
+function loadPreset(){
+  const p = PRESETS[parseInt(document.getElementById('presetSelect').value)];
+  if (!p) return;
+  const s = Math.max(1, parseInt(document.getElementById('weekServ').value) || 1);
+  week.servings = s;
+  week.days.forEach((d, di) => {
+    const names = di < 5 ? (p.days[di] || []) : [];   // 土日はメニュー表対象外
+    d.meals = names.filter(n => findRecipe(n)).map(n => ({recipe:n, servings:s}));
+  });
+  renderWeek(); buildShoppingList(); persistWeek();
+  toast(`${p.label} を読み込みました`);
+}
+// プリセットのラベル「6月 第2週（8〜12日）」から月と日の範囲を取り出す
+function parseRange(label){
+  const m = label.match(/^(\d+)月 第\d+週（(\d+)(?:[〜・](\d+))?日）/);
+  if (!m) return null;
+  return {month: +m[1], start: +m[2], end: +(m[3] || m[2])};
+}
+// 献立が空のとき、今日の日付に合う週のメニューを自動で読み込む
+// （保存が効かない環境でも、開けば必ず今週の献立が表示される）
+function autoLoadCurrentWeek(){
+  if (week.days.some(d => d.meals.length > 0)) return;  // 既に献立があれば何もしない
+  const now = new Date();
+  const cm = now.getMonth() + 1, cd = now.getDate();
+  let idx = -1;
+  PRESETS.forEach((p, i) => {
+    const r = parseRange(p.label);
+    if (r && r.month === cm && cd >= r.start && cd <= r.end + 2) idx = i;  // +2で土日もカバー
+  });
+  if (idx < 0){  // 範囲に当たらなければ同月で直近に始まった週
+    PRESETS.forEach((p, i) => {
+      const r = parseRange(p.label);
+      if (r && r.month === cm && r.start <= cd) idx = i;
+    });
+  }
+  if (idx < 0) idx = PRESETS.length - 1;  // それも無ければ最新の週
+  document.getElementById('presetSelect').value = idx;
+  loadPreset();
+}
+
+/* ============================================================
+   タブ3: 月間メニュー一覧
+============================================================ */
+function buildMonthSelect(){
+  const sel = document.getElementById('monthSelect');
+  const months = [...new Set(PRESETS.map(p => p.label.split(' ')[0]))];
+  months.forEach(m => {
+    const o = document.createElement('option'); o.value = m; o.textContent = `${m}のお昼メニュー`;
+    sel.appendChild(o);
+  });
+  sel.value = months[months.length - 1];  // 最新の月を初期表示
+  sel.addEventListener('change', renderMenuTable);
+}
+function openDish(name, servings){
+  document.querySelector('[data-panel="p-dish"]').click();
+  const sel = document.getElementById('dishSelect');
+  sel.value = name;
+  if (servings) document.getElementById('dishServ').value = servings;
+  renderDish();
+  window.scrollTo(0, 0);
+}
+function loadPresetByIndex(i){
+  document.getElementById('presetSelect').value = i;
+  loadPreset();
+  document.querySelector('[data-panel="p-week"]').click();
+  window.scrollTo(0, 0);
+}
+function renderMenuTable(){
+  const m = document.getElementById('monthSelect').value;
+  const weeks = PRESETS.map((p, i) => ({...p, idx: i})).filter(p => p.label.startsWith(m));
+  const wrap = document.getElementById('menuTableWrap');
+  const table = document.createElement('table');
+  table.className = 'menutable';
+  table.innerHTML = '<thead><tr><th>週</th><th>月曜日</th><th>火曜日</th><th>水曜日</th><th>木曜日</th><th>金曜日</th></tr></thead>';
+  const tbody = document.createElement('tbody');
+  weeks.forEach(w => {
+    const tr = document.createElement('tr');
+    const wk = document.createElement('td');
+    wk.className = 'wk';
+    // ラベルの「6月 第1週（1〜5日）」から週部分のみ表示
+    const short = w.label.replace(m + ' ', '');
+    wk.innerHTML = `${short}<br>`;
+    const lb = document.createElement('button');
+    lb.className = 'btn ghost small'; lb.textContent = '読込'; lb.style.marginTop = '6px';
+    lb.onclick = () => loadPresetByIndex(w.idx);
+    wk.appendChild(lb);
+    tr.appendChild(wk);
+    for (let d = 0; d < 5; d++){
+      const td = document.createElement('td');
+      (w.days[d] || []).forEach((name, j) => {
+        const b = document.createElement('button');
+        b.className = 'dishlink' + (j === 0 ? ' main' : '');
+        b.textContent = name;
+        b.onclick = () => openDish(name);
+        td.appendChild(b);
+      });
+      if (!(w.days[d] || []).length) td.innerHTML = '<span class="unitnote">—</span>';
+      tr.appendChild(td);
+    }
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  wrap.innerHTML = '';
+  wrap.appendChild(table);
+}
+function applyServAll(){
+  const s = Math.max(1, parseInt(document.getElementById('weekServ').value)||1);
+  week.servings = s;
+  week.days.forEach(d => d.meals.forEach(m => m.servings = s));
+  renderWeek(); persistWeek();
+  toast(`全日の人数を ${s} 人に設定しました`);
+}
+async function clearWeek(){
+  if (!(await askConfirm('一週間の献立をすべてクリアしますか？'))) return;
+  week.days.forEach(d => d.meals = []);
+  renderWeek(); persistWeek();
+  document.getElementById('shopResult').innerHTML = '<p class="empty">献立に料理を追加すると、必要な材料の種類と合計量がここに表示されます。</p>';
+  document.getElementById('menuSummary').textContent = '';
+}
+document.getElementById('weekServ').addEventListener('change', e => {
+  week.servings = Math.max(1, parseInt(e.target.value)||1);
+  persistWeek();
+});
+
+function buildShoppingList(){
+  const agg = new Map();   // key: 食材名|単位
+  let mealCount = 0;
+  const dishNames = [];
+  week.days.forEach(d => d.meals.forEach(m => {
+    const r = findRecipe(m.recipe);
+    if (!r) return;
+    mealCount++;
+    dishNames.push(`${d.day}:${r.name}`);
+    r.items.forEach(it => {
+      // 大さじは小さじに正規化して合算（大さじ1 = 小さじ3）
+      let u = it.u, q = it.q * m.servings;
+      if (u === '大さじ'){ u = '小さじ'; q *= 3; }
+      const key = it.n + '|' + u;
+      if (!agg.has(key)) agg.set(key, {n:it.n, u, c:it.c, q:0});
+      agg.get(key).q += q;
+    });
+  }));
+
+  const summary = document.getElementById('menuSummary');
+  const out = document.getElementById('shopResult');
+  if (mealCount === 0){
+    out.innerHTML = '<p class="empty">献立に料理がまだ入っていません。上の各曜日に「＋ 料理を追加」してください。</p>';
+    summary.textContent = '';
+    lastShoppingText = '';
+    return;
+  }
+  summary.textContent = `献立：${dishNames.join('、')}（全${mealCount}品）`;
+
+  // 分量つきの行がある食材の「適量」行は省く
+  const all = [...agg.values()];
+  const values = all.filter(v => !(v.u === '適量' && all.some(o => o.n === v.n && o.u !== '適量')));
+
+  // 分類ごとにグループ化
+  const groups = {};
+  CAT_ORDER.forEach(c => groups[c] = []);
+  values.forEach(v => (groups[v.c] || groups.other).push(v));
+  CAT_ORDER.forEach(c => groups[c].sort((a,b) => a.n.localeCompare(b.n, 'ja')));
+
+  out.innerHTML = '';
+  let text = `【買い物リスト】一週間分（全${mealCount}品）\n`;
+  CAT_ORDER.forEach(c => {
+    if (groups[c].length === 0) return;
+    const g = document.createElement('div');
+    g.className = 'group';
+    const cat = CATS[c];
+    g.innerHTML = `<span class="gtitle chip ${cat.cls}">${cat.label}（${groups[c].length}種類）</span>`;
+    text += `\n■${cat.label}\n`;
+    groups[c].forEach(v => {
+      const amount = fmtShopAmount(v);
+      const hint = ceilHint(v.q, v.u);
+      const item = document.createElement('label');
+      item.className = 'shopitem';
+      item.innerHTML = `<input type="checkbox"><span class="iname">${v.n}</span>
+        <span class="iqty">${amount}</span><span class="hint">${hint}</span>`;
+      item.querySelector('input').addEventListener('change', e => {
+        item.classList.toggle('done', e.target.checked);
+      });
+      g.appendChild(item);
+      text += `・${v.n} ${amount}${hint}\n`;
+    });
+    out.appendChild(g);
+  });
+  lastShoppingText = text;
+  toast('買い物リストを更新しました');
+}
+function copyShoppingList(){
+  if (!lastShoppingText){ buildShoppingList(); }
+  if (!lastShoppingText){ toast('先に献立を入力してください'); return; }
+  copyText(lastShoppingText, '買い物リストをコピーしました');
+}
+
+/* ============================================================
+   タブ3: レシピ管理
+============================================================ */
+function addIngRow(pref){
+  const wrap = document.getElementById('ingRows');
+  const row = document.createElement('div');
+  row.className = 'ingrow';
+  pref = pref || {};
+  const name = document.createElement('input');
+  name.type = 'text'; name.placeholder = '食材名'; name.value = pref.n || '';
+  const qty = document.createElement('input');
+  qty.type = 'number'; qty.step = '0.1'; qty.min = '0'; qty.placeholder = '数量';
+  qty.value = (pref.q === undefined || pref.q === null) ? '' : pref.q;
+  const unit = document.createElement('select');
+  UNITS.forEach(u => { const o = document.createElement('option'); o.value = u; o.textContent = u; unit.appendChild(o); });
+  if (pref.u) unit.value = pref.u;
+  const cat = document.createElement('select');
+  CAT_ORDER.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = CATS[c].label; cat.appendChild(o); });
+  if (pref.c) cat.value = pref.c;
+  const x = document.createElement('button');
+  x.className = 'x'; x.textContent = '✕'; x.type = 'button';
+  x.onclick = () => row.remove();
+  row.append(name, qty, unit, cat, x);
+  wrap.appendChild(row);
+}
+function saveRecipe(){
+  const name = document.getElementById('newName').value.trim();
+  if (!name){ toast('料理名を入力してください'); return; }
+  if (findRecipe(name)){ toast('同じ名前の料理がすでにあります'); return; }
+  const items = [];
+  document.querySelectorAll('#ingRows .ingrow').forEach(row => {
+    const [n, q] = row.querySelectorAll('input');
+    const [u, c] = row.querySelectorAll('select');
+    if (!n.value.trim()) return;
+    const qty = u.value === '適量' ? 0 : parseFloat(q.value);
+    if (u.value !== '適量' && (!isFinite(qty) || qty <= 0)) return;
+    items.push({n: n.value.trim(), q: qty || 0, u: u.value, c: c.value});
+  });
+  if (items.length === 0){ toast('材料を1つ以上入力してください'); return; }
+  const steps = document.getElementById('newSteps').value
+    .split('\n').map(s => s.trim()).filter(Boolean);
+  customRecipes.push({name, genre: document.getElementById('newGenre').value, items, steps, custom:true});
+  save(LS_RECIPES, customRecipes);
+  document.getElementById('newName').value = '';
+  document.getElementById('newSteps').value = '';
+  document.getElementById('ingRows').innerHTML = '';
+  addIngRow(); addIngRow(); addIngRow();
+  buildDishSelect(); renderWeek(); renderCustomList();
+  toast(`「${name}」を保存しました`);
+}
+async function deleteRecipe(name){
+  if (!(await askConfirm(`「${name}」を削除しますか？`))) return;
+  customRecipes = customRecipes.filter(r => r.name !== name);
+  save(LS_RECIPES, customRecipes);
+  // 献立で使われていたら除去
+  week.days.forEach(d => d.meals = d.meals.filter(m => m.recipe !== name));
+  persistWeek();
+  buildDishSelect(); renderWeek(); renderCustomList(); renderDish();
+}
+function renderCustomList(){
+  const ul = document.getElementById('customList');
+  ul.innerHTML = '';
+  if (customRecipes.length === 0){
+    ul.innerHTML = '<li class="empty">まだありません</li>';
+    return;
+  }
+  customRecipes.forEach(r => {
+    const li = document.createElement('li');
+    li.innerHTML = `<span>🍴 ${r.name}（${r.genre}・材料${r.items.length}品）</span>`;
+    const del = document.createElement('button');
+    del.className = 'btn ghost small'; del.textContent = '削除';
+    del.onclick = () => deleteRecipe(r.name);
+    li.appendChild(del);
+    ul.appendChild(li);
+  });
+}
+
+/* ============================================================
+   診断・動作テスト
+============================================================ */
+const APP_VER = 'v5';
+function updateDiag(){
+  let storageOK = true;
+  try{ localStorage.setItem('__t','1'); localStorage.removeItem('__t'); }catch(e){ storageOK = false; }
+  const el = document.getElementById('diagLine');
+  el.style.color = '#2e7d32';
+  el.textContent = `✅ ${APP_VER} 動作中／保存:${storageOK ? '可' : '不可（この環境では閉じると入力が消えます）'}`;
+  document.getElementById('selfTestBtn').style.display = '';
+}
+function selfTest(){
+  const r = [];
+  const ok = (name, cond) => r.push((cond ? '✅ ' : '❌ ') + name);
+  const backup = JSON.stringify(week);   // テスト後に献立を元へ戻す
+  try{
+    document.querySelector('.tab[data-panel="p-menu"]').click();
+    ok('タブ切替', document.getElementById('p-menu').classList.contains('active'));
+    document.querySelectorAll('.menutable .wk .btn')[0].click();
+    ok('週の読込', week.days.some(d => d.meals.length > 0));
+    ok('献立の画面表示', document.querySelectorAll('#weekDays .mealrow').length > 0);
+    ok('買い物リスト生成', document.querySelectorAll('.shopitem').length > 0);
+    document.querySelectorAll('#weekDays .mealrow .btn')[0].click();
+    ok('材料・作り方表示', document.querySelectorAll('#dishSteps li').length > 0);
+  }catch(e){ r.push('❌ エラー: ' + e.message); }
+  try{  // 献立をテスト前の状態に戻す
+    week = JSON.parse(backup);
+    renderWeek(); buildShoppingList(); persistWeek();
+  }catch(e){}
+  const ov = document.createElement('div');
+  ov.className = 'confirm-ov';
+  ov.innerHTML = `<div class="confirm-box"><p style="white-space:pre-line"></p>
+    <div class="row" style="justify-content:flex-end"><button class="btn small">閉じる</button></div></div>`;
+  ov.querySelector('p').textContent = '【動作テスト結果】\n' + r.join('\n');
+  ov.querySelector('button').onclick = () => ov.remove();
+  document.body.appendChild(ov);
+}
+
+/* ============================================================
+   初期化（失敗したら画面に理由を表示する）
+============================================================ */
+try{
+  buildDishSelect();
+  buildPresetSelect();
+  buildMonthSelect();
+  renderMenuTable();
+  renderDish();
+  renderWeek();
+  renderCustomList();
+  addIngRow(); addIngRow(); addIngRow();
+  autoLoadCurrentWeek();   // 献立が空なら今日の週を自動セット
+  updateDiag();
+}catch(e){
+  const el = document.getElementById('diagLine');
+  if (el) el.textContent = '⚠ 初期化エラー: ' + e.message;
+}
+</script>
+</body>
+</html>
